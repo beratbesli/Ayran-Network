@@ -72,6 +72,7 @@ class ProcessSnapshot:
     estimated_upload_bytes_per_second: float
     estimated_download_bytes_per_second: float
     rate_estimate_basis: str
+    create_time: float | None = None
     limited_access: bool = False
     warning: str | None = None
 
@@ -212,7 +213,7 @@ class PsutilNetworkBackend:
         warnings: list[str] = []
         try:
             process_iterator = psutil.process_iter(
-                attrs=("pid", "name", "username", "status"),
+                attrs=("pid", "name", "username", "status", "create_time"),
                 ad_value=None,
             )
             for process in process_iterator:
@@ -240,6 +241,7 @@ class PsutilNetworkBackend:
             name = _text_or_unknown(info.get("name"))
             username = _text_or_unknown(info.get("username"))
             status = _text_or_unknown(info.get("status"))
+            create_time = _optional_float(info.get("create_time"))
         except (psutil.NoSuchProcess, psutil.ZombieProcess):
             return None
         except psutil.AccessDenied as error:
@@ -306,6 +308,7 @@ class PsutilNetworkBackend:
                 estimated_upload_bytes_per_second=0.0,
                 estimated_download_bytes_per_second=0.0,
                 rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
+                create_time=create_time,
             ),
             activity_score=activity_score,
         )
@@ -425,6 +428,10 @@ def _connection_activity_score(connection: ProcessConnection) -> float:
 
 def _text_or_unknown(value: Any) -> str:
     return str(value) if value not in (None, "") else "unknown"
+
+
+def _optional_float(value: Any) -> float | None:
+    return float(value) if isinstance(value, (int, float)) else None
 
 
 def _format_process_warning(pid: int, error: BaseException) -> str:

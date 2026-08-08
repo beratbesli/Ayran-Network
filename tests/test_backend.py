@@ -43,6 +43,7 @@ class FakeProcess:
         name: str = "worker",
         username: str = "alice",
         status: str = psutil.STATUS_RUNNING,
+        create_time: float = 42.0,
         connections: list[SimpleNamespace] | BaseException | None = None,
     ) -> None:
         self.pid = pid
@@ -51,6 +52,7 @@ class FakeProcess:
             "name": name,
             "username": username,
             "status": status,
+            "create_time": create_time,
         }
         self._connections = connections if connections is not None else []
 
@@ -189,6 +191,7 @@ async def test_process_connections_counts_and_connection_weighted_estimates(
     assert resolver.connection_count == 1
     assert resolver.established_connection_count == 0
     assert browser.connection_count == 2
+    assert browser.create_time == 42.0
     assert browser.established_connection_count == 1
     assert browser.listening_connection_count == 1
     remote_connection = next(
