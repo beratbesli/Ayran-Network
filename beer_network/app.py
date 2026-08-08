@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import math
 import os
+import re
+import unicodedata
 from collections import deque
 from collections.abc import Sequence
 from functools import partial
@@ -15,10 +17,11 @@ from rich.text import Text
 from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Sparkline, Static
 
+from beer_network.ai_analysis import AIAnalysisResult, AIAnalysisService
 from beer_network.backend import NetworkSnapshot, ProcessSnapshot, PsutilNetworkBackend
 from beer_network.focus import FocusClassifier, FocusSelection
 from beer_network.geoip import GeoIPResolver, GeoIPResult
@@ -29,6 +32,37 @@ DEFAULT_HISTORY_SIZE = 60
 MAX_GEOIP_LOOKUPS_PER_BATCH = 8
 
 _COMPACT_LAYOUT_MAX_WIDTH: Final = 90
+_AI_RESULT_MAX_CHARACTERS: Final = 4_000
+_AI_FIELD_MAX_CHARACTERS: Final = 160
+_AI_UNEXPECTED_ERROR: Final = "AI analysis failed unexpectedly. Please try again."
+_AI_PRIVACY_NOTE: Final = (
+    "Shared fields: process name/status, ports, socket states/types/families, connection "
+    "counts, estimated rates, and the estimate basis. IP addresses, PID, and username "
+    "are not sent."
+)
+_AI_ADVISORY_WARNING: Final = (
+    "Advisory only: network telemetry cannot prove that a process is safe or malicious. "
+    "Verify the result independently; AI analysis never triggers process actions."
+)
+_ANSI_ESCAPE_PATTERN: Final = re.compile(
+    r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-_])"
+)
+_BIDI_CONTROL_CHARACTERS: Final[frozenset[str]] = frozenset(
+    {
+        "\u061c",
+        "\u200e",
+        "\u200f",
+        "\u202a",
+        "\u202b",
+        "\u202c",
+        "\u202d",
+        "\u202e",
+        "\u2066",
+        "\u2067",
+        "\u2068",
+        "\u2069",
+    }
+)
 _FALSE_LIKE_VALUES: Final[frozenset[str]] = frozenset(
     {"", "0", "f", "false", "n", "no", "off", "disable", "disabled"}
 )
@@ -110,6 +144,38 @@ class ProcessControl(Protocol):
         expected_create_time: float | None = None,
     ) -> ProcessActionResult:
         """Suspend a process after validating its identity."""
+
+        ...
+
+
+class AIAnalyzer(Protocol):
+    """The optional AI-analysis interface used by the application."""
+
+    @property
+    def available(self) -> bool:
+        """Return whether analysis is currently configured and available."""
+
+        ...
+
+    @property
+    def provider(self) -> str | None:
+        """Return the configured provider label, when available."""
+
+        ...
+
+    @property
+    def model(self) -> str | None:
+        """Return the configured model name, when available."""
+
+        ...
+
+    async def analyze(self, process: ProcessSnapshot) -> AIAnalysisResult:
+        """Analyze one immutable process snapshot."""
+
+        ...
+
+    async def aclose(self) -> None:
+        """Close resources owned by the analyzer."""
 
         ...
 
@@ -198,6 +264,144 @@ class ProcessActionConfirmScreen(ModalScreen[bool]):
         self.dismiss(False)
 
 
+class AIAnalysisScreen(ModalScreen[None]):
+    """Show a bounded, literal-text AI assessment for a captured process."""
+
+    BINDINGS = [Binding("escape", "close", "Close")]
+
+    CSS = """
+    AIAnalysisScreen {
+        align: center middle;
+        background: $background 70%;
+    }
+
+    #ai-analysis-dialog {
+        width: 82%;
+        min-width: 42;
+        max-width: 90;
+        height: auto;
+        max-height: 90%;
+        border: round $primary;
+        background: $surface;
+        padding: 1 2;
+    }
+
+    #ai-analysis-title {
+        height: 1;
+        text-style: bold;
+        color: $success;
+    }
+
+    #ai-analysis-title.failure {
+        color: $error;
+    }
+
+    #ai-analysis-process, #ai-analysis-provider {
+        height: auto;
+        color: $text-muted;
+    }
+
+    #ai-analysis-message {
+        height: auto;
+        min-height: 4;
+        margin: 1 0;
+        border: round $panel;
+        padding: 0 1;
+    }
+
+    #ai-analysis-privacy, #ai-analysis-advisory {
+        height: auto;
+        margin-top: 1;
+    }
+
+    #ai-analysis-privacy {
+        color: $text-muted;
+    }
+
+    #ai-analysis-advisory {
+        color: $warning;
+    }
+
+    #ai-analysis-buttons {
+        height: 3;
+        align-horizontal: right;
+    }
+    """
+
+    def __init__(self, process: ProcessSnapshot, result: AIAnalysisResult) -> None:
+        super().__init__()
+        self.process = process
+        self.result = result
+
+    def compose(self) -> ComposeResult:
+        """Build the assessment dialog without interpreting provider text as markup."""
+
+        success = self.result.success and self.result.analysis is not None
+        title = "AI Analysis Complete" if success else "AI Analysis Failed"
+        title_classes = None if success else "failure"
+        raw_body = self.result.analysis if success else self.result.error
+        body = _bounded_terminal_text(
+            raw_body or "",
+            _AI_RESULT_MAX_CHARACTERS,
+            preserve_newlines=True,
+        )
+        if not body.strip():
+            body = "AI analysis did not return a usable result."
+        provider = _bounded_terminal_text(
+            self.result.provider or "",
+            _AI_FIELD_MAX_CHARACTERS,
+        )
+        model = _bounded_terminal_text(
+            self.result.model or "",
+            _AI_FIELD_MAX_CHARACTERS,
+        )
+        process_name = _bounded_terminal_text(
+            self.process.name,
+            _AI_FIELD_MAX_CHARACTERS,
+        )
+        provider = provider or "Not reported"
+        model = model or "Not reported"
+        process_name = process_name or "unknown"
+
+        with VerticalScroll(id="ai-analysis-dialog"):
+            yield Static(
+                Text(title),
+                id="ai-analysis-title",
+                classes=title_classes,
+                markup=False,
+            )
+            yield Static(
+                Text(f"Process: {process_name} (PID {self.process.pid})"),
+                id="ai-analysis-process",
+                markup=False,
+            )
+            yield Static(
+                Text(f"Provider: {provider} | Model: {model}"),
+                id="ai-analysis-provider",
+                markup=False,
+            )
+            yield Static(
+                Text(body),
+                id="ai-analysis-message",
+                markup=False,
+            )
+            yield Static(Text(_AI_PRIVACY_NOTE), id="ai-analysis-privacy", markup=False)
+            yield Static(Text(_AI_ADVISORY_WARNING), id="ai-analysis-advisory", markup=False)
+            with Horizontal(id="ai-analysis-buttons"):
+                yield Button("Close", id="close-ai-analysis", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Close the dialog when its only button is pressed."""
+
+        if event.button.id == "close-ai-analysis":
+            self.dismiss()
+
+    def action_close(self) -> None:
+        """Close the dialog without performing any process action."""
+
+        self.dismiss()
+
+
 class BeerNetworkApp(App[None]):
     """A live terminal dashboard for global and per-process network activity."""
 
@@ -208,6 +412,7 @@ class BeerNetworkApp(App[None]):
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh_now", "Refresh"),
         Binding("g", "toggle_geoip", "Geo-IP"),
+        Binding("a", "analyze_process", "AI Analyze"),
         Binding("k", "terminate_process", "Kill"),
         Binding("s", "suspend_process", "Suspend"),
     ]
@@ -309,6 +514,7 @@ class BeerNetworkApp(App[None]):
         classifier: ProcessClassifier | None = None,
         geoip_resolver: GeoIPLookup | None = None,
         process_controller: ProcessControl | None = None,
+        analyzer: AIAnalyzer | None = None,
         geoip_enabled: bool | None = None,
     ) -> None:
         if not math.isfinite(poll_interval) or poll_interval <= 0.0:
@@ -328,7 +534,11 @@ class BeerNetworkApp(App[None]):
         self.process_controller: ProcessControl = (
             process_controller if process_controller is not None else ProcessController()
         )
+        self.analyzer: AIAnalyzer = (
+            analyzer if analyzer is not None else AIAnalysisService.from_environment()
+        )
         self._owns_geoip_resolver = geoip_resolver is None
+        self._owns_analyzer = analyzer is None
         self._geoip_enabled = (
             _geoip_enabled_from_environment() if geoip_enabled is None else geoip_enabled
         )
@@ -340,6 +550,7 @@ class BeerNetworkApp(App[None]):
         self._shutting_down = False
         self._process_action_running = False
         self._confirmation_open = False
+        self._analysis_running = False
         self._focus_mode_active = False
         self._compact_layout: bool | None = None
         self._rendering_tables = False
@@ -405,14 +616,22 @@ class BeerNetworkApp(App[None]):
         self.request_refresh()
 
     async def on_unmount(self) -> None:
-        """Close the resolver created and owned by this application."""
+        """Close optional services created and owned by this application."""
 
         self._shutting_down = True
         self._geoip_generation += 1
+        analysis_workers = self.workers.cancel_group(self, "ai-analysis")
+        if analysis_workers:
+            await asyncio.gather(
+                *(worker.wait() for worker in analysis_workers),
+                return_exceptions=True,
+            )
         if self._owns_geoip_resolver:
             resolver = self.geoip_resolver
             if isinstance(resolver, GeoIPResolver):
                 await resolver.aclose()
+        if self._owns_analyzer:
+            await self.analyzer.aclose()
 
     def on_resize(self, event: events.Resize) -> None:
         """Use a compact table schema on narrow terminals."""
@@ -466,6 +685,42 @@ class BeerNetworkApp(App[None]):
         """Request confirmation before suspending the selected process."""
 
         self._request_process_action("suspend")
+
+    def action_analyze_process(self) -> None:
+        """Analyze the selected immutable snapshot with the optional AI service."""
+
+        if self._analysis_running:
+            self.notify(
+                "An AI analysis is already in progress.",
+                title="AI Analysis",
+                severity="warning",
+            )
+            return
+        if not self.analyzer.available:
+            self.notify(
+                "AI analysis is unavailable. Configure a local provider or set GROQ_API_KEY.",
+                title="AI Analysis",
+                severity="warning",
+            )
+            return
+
+        process_snapshot = self._selected_process()
+        if process_snapshot is None:
+            self.notify(
+                "Select a process before requesting AI analysis.",
+                title="AI Analysis",
+                severity="warning",
+            )
+            return
+
+        self._analysis_running = True
+        self.run_worker(
+            self._perform_ai_analysis(process_snapshot),
+            name=f"ai-analysis-{process_snapshot.pid}",
+            group="ai-analysis",
+            exit_on_error=False,
+            exclusive=False,
+        )
 
     def request_refresh(self) -> None:
         """Start a sample worker unless another sample is already in progress."""
@@ -771,6 +1026,27 @@ class BeerNetworkApp(App[None]):
         finally:
             self._process_action_running = False
 
+    async def _perform_ai_analysis(self, process: ProcessSnapshot) -> None:
+        """Run one isolated analysis and present a non-actionable result."""
+
+        try:
+            result = await self.analyzer.analyze(process)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            result = AIAnalysisResult(
+                success=False,
+                error=_AI_UNEXPECTED_ERROR,
+                provider=self.analyzer.provider,
+                model=self.analyzer.model,
+            )
+        finally:
+            self._analysis_running = False
+
+        if self._shutting_down or not self.is_running:
+            return
+        self.push_screen(AIAnalysisScreen(process, result))
+
     def _format_remote_endpoint(self, process: ProcessSnapshot) -> str:
         endpoints: list[tuple[str, int | None]] = []
         seen: set[tuple[str, int | None]] = set()
@@ -956,6 +1232,35 @@ def _truncate(value: str, length: int) -> str:
     return f"{value[: length - 1]}\N{HORIZONTAL ELLIPSIS}"
 
 
+def _bounded_terminal_text(
+    value: str,
+    length: int,
+    *,
+    preserve_newlines: bool = False,
+) -> str:
+    """Remove terminal controls and bound untrusted text for literal display."""
+
+    value = value[: max(length * 4, length)]
+    if preserve_newlines:
+        value = value.replace("\r\n", "\n").replace("\r", "\n")
+    without_ansi = _ANSI_ESCAPE_PATTERN.sub("", value)
+    cleaned: list[str] = []
+    for character in without_ansi:
+        if character in _BIDI_CONTROL_CHARACTERS:
+            continue
+        if preserve_newlines and character == "\n":
+            cleaned.append(character)
+            continue
+        codepoint = ord(character)
+        if codepoint < 0x20 or 0x7F <= codepoint <= 0x9F:
+            cleaned.append(" ")
+            continue
+        if unicodedata.category(character) in {"Cc", "Cf", "Cs"}:
+            continue
+        cleaned.append(character)
+    return _truncate("".join(cleaned), length)
+
+
 def format_rate(bytes_per_second: float) -> str:
     """Format a byte rate for compact display."""
 
@@ -990,6 +1295,8 @@ def main() -> None:
 
 
 __all__ = [
+    "AIAnalysisScreen",
+    "AIAnalyzer",
     "BeerNetworkApp",
     "GeoIPLookup",
     "NetworkSampler",
