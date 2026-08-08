@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import socket
 from collections.abc import Callable, Iterator
 from dataclasses import FrozenInstanceError
@@ -9,7 +10,6 @@ from typing import Any
 import psutil
 import pytest
 
-from beer_network import backend as backend_module
 from beer_network.backend import (
     PROCESS_RATE_ESTIMATE_BASIS,
     GlobalRates,
@@ -24,7 +24,7 @@ def run_worker_calls_inline(monkeypatch: pytest.MonkeyPatch) -> None:
     async def inline_to_thread(function: Callable[[], Any]) -> Any:
         return function()
 
-    monkeypatch.setattr(backend_module.asyncio, "to_thread", inline_to_thread)
+    monkeypatch.setattr(asyncio, "to_thread", inline_to_thread)
 
 
 class SequenceClock:
@@ -111,8 +111,8 @@ def install_psutil_fakes(
         sent, received = value
         return SimpleNamespace(bytes_sent=sent, bytes_recv=received)
 
-    monkeypatch.setattr(backend_module.psutil, "net_io_counters", net_io_counters)
-    monkeypatch.setattr(backend_module.psutil, "process_iter", processes)
+    monkeypatch.setattr(psutil, "net_io_counters", net_io_counters)
+    monkeypatch.setattr(psutil, "process_iter", processes)
 
 
 @pytest.mark.asyncio
@@ -297,7 +297,7 @@ async def test_sample_offloads_sync_polling_to_a_thread_helper(
         calls.append(function)
         return function()
 
-    monkeypatch.setattr(backend_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
     sampler = PsutilNetworkBackend(clock=SequenceClock(1.0))
 
     await sampler.sample()
