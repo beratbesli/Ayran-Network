@@ -1,0 +1,87 @@
+"""Tests for the export functionality."""
+
+import json
+from unittest.mock import Mock
+
+from beer_network.backend import GlobalRates, NetworkSnapshot, ProcessSnapshot
+from beer_network.export import export_csv, export_json
+
+
+def test_export_json():
+    """Test exporting a snapshot to JSON."""
+    snapshot = NetworkSnapshot(
+        sampled_at=1620000000.0,
+        global_rates=GlobalRates(
+            upload_bytes_per_second=100.0,
+            download_bytes_per_second=200.0,
+            total_bytes_sent=1000,
+            total_bytes_received=2000,
+            interval_seconds=1.0,
+        ),
+        processes=(
+            ProcessSnapshot(
+                pid=123,
+                name="test_process",
+                username="test_user",
+                status="running",
+                create_time=1610000000.0,
+                connections=(),
+                connection_count=0,
+                established_connection_count=0,
+                listening_connection_count=0,
+                estimated_upload_bytes_per_second=10.0,
+                estimated_download_bytes_per_second=20.0,
+                rate_estimate_basis="test",
+                limited_access=False,
+            ),
+        ),
+        limited_access=False,
+        warnings=(),
+    )
+    
+    result = export_json(snapshot)
+    data = json.loads(result)
+    
+    assert data["sampled_at"] == 1620000000.0
+    assert data["global_rates"]["upload_bytes_per_second"] == 100.0
+    assert len(data["processes"]) == 1
+    assert data["processes"][0]["pid"] == 123
+    assert data["processes"][0]["name"] == "test_process"
+
+
+def test_export_csv():
+    """Test exporting a snapshot to CSV."""
+    snapshot = NetworkSnapshot(
+        sampled_at=1620000000.0,
+        global_rates=GlobalRates(
+            upload_bytes_per_second=100.0,
+            download_bytes_per_second=200.0,
+            total_bytes_sent=1000,
+            total_bytes_received=2000,
+            interval_seconds=1.0,
+        ),
+        processes=(
+            ProcessSnapshot(
+                pid=123,
+                name="test_process",
+                username="test_user",
+                status="running",
+                create_time=1610000000.0,
+                connections=(),
+                connection_count=0,
+                established_connection_count=0,
+                listening_connection_count=0,
+                estimated_upload_bytes_per_second=10.0,
+                estimated_download_bytes_per_second=20.0,
+                rate_estimate_basis="test",
+                limited_access=False,
+            ),
+        ),
+        limited_access=False,
+        warnings=(),
+    )
+    
+    result = export_csv(snapshot)
+    
+    assert "timestamp,pid,name,username,status,connections,established,listening,estimated_upload_bps,estimated_download_bps,global_upload_bps,global_download_bps,total_bytes_sent,total_bytes_received" in result
+    assert "123,test_process,test_user,running,0,0,0,10.0,20.0,100.0,200.0,1000,2000" in result

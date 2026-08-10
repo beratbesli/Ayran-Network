@@ -675,7 +675,7 @@ async def test_empty_table_never_opens_confirmation_or_calls_controller() -> Non
         assert not isinstance(app.screen, ProcessActionConfirmScreen)
         notifications = tuple(app._notifications)
         assert any(
-            notification.message == "Select a process before using Kill or Suspend."
+            notification.message == "Select a process before using Kill, Suspend, or Resume."
             and notification.severity == "warning"
             for notification in notifications
         )
