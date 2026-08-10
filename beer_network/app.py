@@ -9,12 +9,13 @@ import re
 import unicodedata
 from collections import deque
 from collections.abc import Sequence
+from datetime import datetime, timezone
 from functools import partial
 from ipaddress import ip_address
 from typing import Final, Protocol
 
 from rich.text import Text
-from textual import events
+from textual import events, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -23,6 +24,7 @@ from textual.widgets import Button, DataTable, Footer, Header, Sparkline, Static
 
 from beer_network.ai_analysis import AIAnalysisResult, AIAnalysisService
 from beer_network.backend import NetworkSnapshot, ProcessSnapshot, PsutilNetworkBackend
+from beer_network.export import export_csv, export_json
 from beer_network.focus import FocusClassifier, FocusSelection
 from beer_network.geoip import GeoIPResolver, GeoIPResult
 from beer_network.process_control import ProcessAction, ProcessActionResult, ProcessController
@@ -144,6 +146,17 @@ class ProcessControl(Protocol):
         expected_create_time: float | None = None,
     ) -> ProcessActionResult:
         """Suspend a process after validating its identity."""
+
+        ...
+
+    async def resume(
+        self,
+        pid: int,
+        *,
+        expected_name: str | None = None,
+        expected_create_time: float | None = None,
+    ) -> ProcessActionResult:
+        """Resume a process after validating its identity."""
 
         ...
 
@@ -402,6 +415,95 @@ class AIAnalysisScreen(ModalScreen[None]):
         self.dismiss()
 
 
+class ProcessDetailsScreen(ModalScreen[None]):
+    """Show details and all connections for a selected process."""
+
+    BINDINGS = [Binding("escape", "close", "Close")]
+
+    CSS = """
+    ProcessDetailsScreen {
+        align: center middle;
+        background: $background 70%;
+    }
+
+    #process-details-dialog {
+        width: 85%;
+        min-width: 50;
+        max-width: 100;
+        height: auto;
+        max-height: 90%;
+        border: round $primary;
+        background: $surface;
+        padding: 1 2;
+    }
+
+    #process-details-title {
+        height: 1;
+        text-style: bold;
+        color: $accent;
+    }
+
+    #process-details-info {
+        height: auto;
+        color: $text-muted;
+        margin-bottom: 1;
+    }
+
+    #process-details-table {
+        height: auto;
+        max-height: 60%;
+    }
+
+    #process-details-buttons {
+        height: 3;
+        align-horizontal: right;
+    }
+    """
+
+    def __init__(self, process: ProcessSnapshot) -> None:
+        super().__init__()
+        self.process = process
+
+    def compose(self) -> ComposeResult:
+        """Build the details dialog."""
+        with VerticalScroll(id="process-details-dialog"):
+            yield Static(
+                Text(f"Process Details: {self.process.name} (PID {self.process.pid})"),
+                id="process-details-title",
+            )
+            
+            info = (
+                f"User: {self.process.username} | Status: {self.process.status}\n"
+                f"Connections: {self.process.connection_count} "
+                f"(Established: {self.process.established_connection_count}, "
+                f"Listening: {self.process.listening_connection_count})\n"
+                f"Est. Upload: {format_rate(self.process.estimated_upload_bytes_per_second)} | "
+                f"Est. Download: {format_rate(self.process.estimated_download_bytes_per_second)}"
+            )
+            yield Static(Text(info), id="process-details-info")
+            
+            table = DataTable(id="process-details-table")
+            table.add_columns("Local", "Remote", "Family", "Type", "Status")
+            for c in self.process.connections:
+                local = _format_endpoint(c.local_host, c.local_port) if c.local_host else "—"
+                remote = _format_endpoint(c.remote_host, c.remote_port) if c.remote_host else "—"
+                table.add_row(local, remote, c.family, c.socket_type, c.status)
+                
+            yield table
+            
+            with Horizontal(id="process-details-buttons"):
+                yield Button("Close", id="close-process-details", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Close the dialog when its only button is pressed."""
+        if event.button.id == "close-process-details":
+            self.dismiss()
+
+    def action_close(self) -> None:
+        """Close the dialog."""
+        self.dismiss()
+
+
 class BeerNetworkApp(App[None]):
     """A live terminal dashboard for global and per-process network activity."""
 
@@ -415,6 +517,9 @@ class BeerNetworkApp(App[None]):
         Binding("a", "analyze_process", "AI Analyze"),
         Binding("k", "terminate_process", "Kill"),
         Binding("s", "suspend_process", "Suspend"),
+        Binding("u", "resume_process", "Resume"),
+        Binding("d", "show_details", "Details"),
+        Binding("e", "export_snapshot", "Export"),
     ]
 
     CSS = """
@@ -435,7 +540,7 @@ class BeerNetworkApp(App[None]):
         padding: 0 1;
     }
 
-    .metric-panel:first-child {
+    .metric-panel:first-of-type {
         margin-right: 1;
     }
 
@@ -686,6 +791,11 @@ class BeerNetworkApp(App[None]):
 
         self._request_process_action("suspend")
 
+    def action_resume_process(self) -> None:
+        """Request confirmation before resuming the selected process."""
+
+        self._request_process_action("resume")
+
     def action_analyze_process(self) -> None:
         """Analyze the selected immutable snapshot with the optional AI service."""
 
@@ -721,6 +831,47 @@ class BeerNetworkApp(App[None]):
             exit_on_error=False,
             exclusive=False,
         )
+
+    def action_show_details(self) -> None:
+        """Show details for the selected process."""
+        process_snapshot = self._selected_process()
+        if process_snapshot is None:
+            self.notify(
+                "Select a process before requesting details.",
+                title="Process Details",
+                severity="warning",
+            )
+            return
+        self.push_screen(ProcessDetailsScreen(process_snapshot))
+
+    def action_export_snapshot(self) -> None:
+        if self._latest_snapshot is None:
+            self.notify("No snapshot available to export.", severity="warning")
+            return
+        self._do_export(self._latest_snapshot)
+
+    @work(exclusive=True, group="export")
+    async def _do_export(self, snapshot: NetworkSnapshot) -> None:
+        import os
+        from pathlib import Path
+        try:
+            export_dir = Path.home() / ".beer-network" / "exports"
+            export_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.fromtimestamp(
+                snapshot.sampled_at, tz=timezone.utc
+            ).strftime("%Y%m%d_%H%M%S")
+            json_path = export_dir / f"snapshot_{timestamp}.jsonl"
+            csv_path = export_dir / f"snapshot_{timestamp}.csv"
+            json_data = export_json(snapshot)
+            csv_data = export_csv(snapshot)
+            await asyncio.to_thread(json_path.write_text, json_data, "utf-8")
+            await asyncio.to_thread(csv_path.write_text, csv_data, "utf-8")
+            self.notify(
+                f"Exported to {export_dir}/",
+                title="Export",
+            )
+        except Exception as exc:
+            self.notify(f"Export failed: {exc}", severity="error")
 
     def request_refresh(self) -> None:
         """Start a sample worker unless another sample is already in progress."""
@@ -962,7 +1113,7 @@ class BeerNetworkApp(App[None]):
         process = self._selected_process()
         if process is None:
             self.notify(
-                "Select a process before using Kill or Suspend.",
+                "Select a process before using Kill, Suspend, or Resume.",
                 title="Process Control",
                 severity="warning",
             )
@@ -1001,8 +1152,14 @@ class BeerNetworkApp(App[None]):
                     expected_name=process.name,
                     expected_create_time=process.create_time,
                 )
-            else:
+            elif action == "suspend":
                 result = await self.process_controller.suspend(
+                    process.pid,
+                    expected_name=process.name,
+                    expected_create_time=process.create_time,
+                )
+            elif action == "resume":
+                result = await self.process_controller.resume(
                     process.pid,
                     expected_name=process.name,
                     expected_create_time=process.create_time,
