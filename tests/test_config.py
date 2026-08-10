@@ -1,7 +1,5 @@
-import os
-import pytest
-from pathlib import Path
-from beer_network.config import BeerNetworkConfig, load_config, _CONFIG_PATH_ENV
+from beer_network.config import _CONFIG_PATH_ENV, load_config
+
 
 def test_default_config():
     config = load_config(None)

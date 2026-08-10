@@ -1,5 +1,5 @@
-import pytest
-from beer_network.interface_filter import InterfaceFilter, INTERFACE_FILTER_ENV
+from beer_network.interface_filter import INTERFACE_FILTER_ENV, InterfaceFilter
+
 
 def test_default_filter_includes_everything():
     f = InterfaceFilter()
