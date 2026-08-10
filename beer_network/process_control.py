@@ -14,11 +14,12 @@ __all__ = [
     "ProcessAction",
     "ProcessActionResult",
     "ProcessController",
+    "resume_process",
     "suspend_process",
     "terminate_process",
 ]
 
-ProcessAction: TypeAlias = Literal["terminate", "suspend"]
+ProcessAction: TypeAlias = Literal["terminate", "suspend", "resume"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +74,21 @@ class ProcessController:
             expected_create_time=expected_create_time,
         )
 
+    async def resume(
+        self,
+        pid: int,
+        *,
+        expected_name: str | None = None,
+        expected_create_time: float | None = None,
+    ) -> ProcessActionResult:
+        """Resume a process after verifying any supplied identity fields."""
+
+        return await resume_process(
+            pid,
+            expected_name=expected_name,
+            expected_create_time=expected_create_time,
+        )
+
 
 async def terminate_process(
     pid: int,
@@ -100,6 +116,22 @@ async def suspend_process(
 
     return await _run_process_action(
         "suspend",
+        pid,
+        expected_name=expected_name,
+        expected_create_time=expected_create_time,
+    )
+
+
+async def resume_process(
+    pid: int,
+    *,
+    expected_name: str | None = None,
+    expected_create_time: float | None = None,
+) -> ProcessActionResult:
+    """Resume a process after optional identity checks in a worker thread."""
+
+    return await _run_process_action(
+        "resume",
         pid,
         expected_name=expected_name,
         expected_create_time=expected_create_time,
@@ -166,8 +198,10 @@ def _perform_process_action(
 
         if action == "terminate":
             process.terminate()
-        else:
+        elif action == "suspend":
             process.suspend()
+        elif action == "resume":
+            process.resume()
     except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess, OSError) as error:
         error_name = type(error).__name__
         detail = str(error).strip()

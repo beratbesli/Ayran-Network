@@ -13,6 +13,7 @@ from beer_network import process_control
 from beer_network.process_control import (
     ProcessActionResult,
     ProcessController,
+    resume_process,
     suspend_process,
     terminate_process,
 )
@@ -44,6 +45,9 @@ class FakeProcess:
 
     def suspend(self) -> None:
         self._record_action("suspend")
+
+    def resume(self) -> None:
+        self._record_action("resume")
 
     def _record_action(self, action: str) -> None:
         if self._action_error is not None:
@@ -101,6 +105,20 @@ async def test_suspend_uses_psutil_without_signaling_a_real_process(
     assert result.success is True
     assert result.action == "suspend"
     assert fake_process.actions == ["suspend"]
+
+
+@pytest.mark.asyncio
+async def test_resume_uses_psutil_without_signaling_a_real_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_process = FakeProcess(41)
+    monkeypatch.setattr(psutil, "Process", lambda pid: fake_process)
+
+    result = await resume_process(41, expected_name="game.exe")
+
+    assert result.success is True
+    assert result.action == "resume"
+    assert fake_process.actions == ["resume"]
 
 
 @pytest.mark.asyncio
