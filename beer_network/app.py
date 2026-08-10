@@ -750,7 +750,7 @@ class BeerNetworkApp(App[None]):
         search_input = self.query_one("#search-input", Input)
         search_input.display = False
         self.query_one("#process-table", DataTable).focus()
-        
+
         self._configure_process_tables(self.size.width <= _COMPACT_LAYOUT_MAX_WIDTH)
         self.set_interval(
             self.poll_interval,
@@ -1002,6 +1002,15 @@ class BeerNetworkApp(App[None]):
         self._render_processes(snapshot.processes)
         self._render_status(snapshot)
 
+    def _get_peak_traffic(self, pid: int) -> float:
+        up_hist = self._process_upload_history.get(pid)
+        down_hist = self._process_download_history.get(pid)
+        recent_up = list(up_hist)[-5:] if up_hist else []
+        recent_down = list(down_hist)[-5:] if down_hist else []
+        peak_up = max(recent_up) if recent_up else 0.0
+        peak_down = max(recent_down) if recent_down else 0.0
+        return peak_up + peak_down
+
     def _render_processes(self, processes: tuple[ProcessSnapshot, ...]) -> None:
         if self._search_query:
             query = self._search_query.casefold()
@@ -1010,9 +1019,7 @@ class BeerNetworkApp(App[None]):
         processes = tuple(
             sorted(
                 processes,
-                key=lambda p: (
-                    p.estimated_upload_bytes_per_second + p.estimated_download_bytes_per_second
-                ),
+                key=lambda p: self._get_peak_traffic(p.pid),
                 reverse=True,
             )
         )
@@ -1114,7 +1121,7 @@ class BeerNetworkApp(App[None]):
             if target_row is None:
                 target_row = min(max(previous_row, 0), table.row_count - 1)
             table.move_cursor(row=target_row, animate=False)
-            table.scroll_to(x=scroll_x, y=scroll_y, animate=False)
+            self.call_later(table.scroll_to, x=scroll_x, y=scroll_y, animate=False)
 
         return selected_row is not None
 
