@@ -16,9 +16,7 @@ def test_default_config() -> None:
 
 def test_load_explicit_path(tmp_path: Path) -> None:
     config_file = tmp_path / "config.toml"
-    config_file.write_text(
-        '[general]\npoll_interval = 2.5\n[focus]\napps = ["TestApp"]\n'
-    )
+    config_file.write_text('[general]\npoll_interval = 2.5\n[focus]\napps = ["TestApp"]\n')
     config = load_config(config_file)
     assert config.poll_interval == 2.5
     assert config.focus_apps == ("TestApp",)
@@ -65,4 +63,3 @@ def test_types_parsing(tmp_path: Path) -> None:
     assert config.history_size == 60  # default fallback
     assert config.focus_apps == ("app1", "app2")
     assert config.focus_extend_defaults is True  # default fallback
-

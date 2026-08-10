@@ -95,7 +95,6 @@ class InterfaceFilter:
         return {name: data for name, data in interfaces.items() if self.should_include(name)}
 
 
-
 def _compile_patterns(patterns_str: str) -> tuple[re.Pattern[str], ...]:
     """Compile comma-separated patterns."""
     result: list[re.Pattern[str]] = []

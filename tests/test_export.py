@@ -49,7 +49,6 @@ def test_export_json() -> None:
 
 
 def test_export_csv() -> None:
-
     """Test exporting a snapshot to CSV."""
     snapshot = NetworkSnapshot(
         sampled_at=1620000000.0,
@@ -80,15 +79,12 @@ def test_export_csv() -> None:
         limited_access=False,
         warnings=(),
     )
-    
+
     result = export_csv(snapshot)
-    
+
     assert (
         "timestamp,pid,name,username,status,connections,established,listening,"
         "estimated_upload_bps,estimated_download_bps,global_upload_bps,"
         "global_download_bps,total_bytes_sent,total_bytes_received"
     ) in result
-    assert (
-        "123,test_process,test_user,running,0,0,0,10.0,20.0,100.0,200.0,1000,2000"
-    ) in result
-
+    assert ("123,test_process,test_user,running,0,0,0,10.0,20.0,100.0,200.0,1000,2000") in result

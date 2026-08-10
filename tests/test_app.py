@@ -118,7 +118,6 @@ class FakeProcessController:
     ) -> ProcessActionResult:
         return self._result("resume", pid, expected_name, expected_create_time)
 
-
     def _result(
         self,
         action: ProcessAction,

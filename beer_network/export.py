@@ -41,26 +41,26 @@ def export_csv(snapshot: NetworkSnapshot) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(_CSV_HEADERS)
-    timestamp = datetime.fromtimestamp(
-        snapshot.sampled_at, tz=timezone.utc
-    ).isoformat()
+    timestamp = datetime.fromtimestamp(snapshot.sampled_at, tz=timezone.utc).isoformat()
     for process in snapshot.processes:
-        writer.writerow([
-            timestamp,
-            process.pid,
-            process.name,
-            process.username,
-            process.status,
-            process.connection_count,
-            process.established_connection_count,
-            process.listening_connection_count,
-            f"{process.estimated_upload_bytes_per_second:.1f}",
-            f"{process.estimated_download_bytes_per_second:.1f}",
-            f"{snapshot.global_rates.upload_bytes_per_second:.1f}",
-            f"{snapshot.global_rates.download_bytes_per_second:.1f}",
-            snapshot.global_rates.total_bytes_sent,
-            snapshot.global_rates.total_bytes_received,
-        ])
+        writer.writerow(
+            [
+                timestamp,
+                process.pid,
+                process.name,
+                process.username,
+                process.status,
+                process.connection_count,
+                process.established_connection_count,
+                process.listening_connection_count,
+                f"{process.estimated_upload_bytes_per_second:.1f}",
+                f"{process.estimated_download_bytes_per_second:.1f}",
+                f"{snapshot.global_rates.upload_bytes_per_second:.1f}",
+                f"{snapshot.global_rates.download_bytes_per_second:.1f}",
+                snapshot.global_rates.total_bytes_sent,
+                snapshot.global_rates.total_bytes_received,
+            ]
+        )
     return output.getvalue()
 
 
@@ -68,9 +68,7 @@ def _snapshot_to_dict(snapshot: NetworkSnapshot) -> dict[str, object]:
     """Convert a snapshot to a JSON-serializable dictionary."""
     return {
         "sampled_at": snapshot.sampled_at,
-        "timestamp": datetime.fromtimestamp(
-            snapshot.sampled_at, tz=timezone.utc
-        ).isoformat(),
+        "timestamp": datetime.fromtimestamp(snapshot.sampled_at, tz=timezone.utc).isoformat(),
         "global_rates": {
             "upload_bytes_per_second": snapshot.global_rates.upload_bytes_per_second,
             "download_bytes_per_second": snapshot.global_rates.download_bytes_per_second,
@@ -80,9 +78,7 @@ def _snapshot_to_dict(snapshot: NetworkSnapshot) -> dict[str, object]:
         },
         "limited_access": snapshot.limited_access,
         "warnings": list(snapshot.warnings),
-        "processes": [
-            _process_to_dict(process) for process in snapshot.processes
-        ],
+        "processes": [_process_to_dict(process) for process in snapshot.processes],
     }
 
 

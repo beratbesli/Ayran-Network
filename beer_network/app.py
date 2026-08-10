@@ -471,7 +471,7 @@ class ProcessDetailsScreen(ModalScreen[None]):
                 Text(f"Process Details: {self.process.name} (PID {self.process.pid})"),
                 id="process-details-title",
             )
-            
+
             info = (
                 f"User: {self.process.username} | Status: {self.process.status}\n"
                 f"Connections: {self.process.connection_count} "
@@ -481,16 +481,16 @@ class ProcessDetailsScreen(ModalScreen[None]):
                 f"Est. Download: {format_rate(self.process.estimated_download_bytes_per_second)}"
             )
             yield Static(Text(info), id="process-details-info")
-            
+
             table: DataTable[str] = DataTable(id="process-details-table")
             table.add_columns("Local", "Remote", "Family", "Type", "Status")
             for c in self.process.connections:
                 local = _format_endpoint(c.local_host, c.local_port) if c.local_host else "—"
                 remote = _format_endpoint(c.remote_host, c.remote_port) if c.remote_host else "—"
                 table.add_row(local, remote, c.family, c.socket_type, c.status)
-                
+
             yield table
-            
+
             with Horizontal(id="process-details-buttons"):
                 yield Button("Close", id="close-process-details", variant="primary")
 
@@ -853,12 +853,13 @@ class BeerNetworkApp(App[None]):
     @work(exclusive=True, group="export")
     async def _do_export(self, snapshot: NetworkSnapshot) -> None:
         from pathlib import Path
+
         try:
             export_dir = Path.home() / ".beer-network" / "exports"
             export_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.fromtimestamp(
-                snapshot.sampled_at, tz=timezone.utc
-            ).strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.fromtimestamp(snapshot.sampled_at, tz=timezone.utc).strftime(
+                "%Y%m%d_%H%M%S"
+            )
             json_path = export_dir / f"snapshot_{timestamp}.jsonl"
             csv_path = export_dir / f"snapshot_{timestamp}.csv"
             json_data = export_json(snapshot)

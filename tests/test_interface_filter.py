@@ -55,4 +55,3 @@ def test_filter_interfaces() -> None:
     interfaces = {"eth0": 1, "lo": 2, "docker0": 3}
     filtered = f.filter_interfaces(interfaces)
     assert filtered == {"eth0": 1}
-

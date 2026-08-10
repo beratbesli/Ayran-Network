@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib  # type: ignore[import-not-found]
+
 
 __all__ = ["BeerNetworkConfig", "load_config"]
 
@@ -62,22 +69,13 @@ def load_config(
        ~/.beer-network/config.toml, ./beer-network.toml
     """
     path = _find_config_file(config_path)
-    if path is None:
+    if path is None or tomllib is None:
         return BeerNetworkConfig()
-
-    import sys
-    if sys.version_info >= (3, 11):
-        import tomllib
-    else:
-        try:
-            import tomli as tomllib  # type: ignore[import-not-found]
-        except ModuleNotFoundError:
-            return BeerNetworkConfig(source_path=str(path))
 
     try:
         with open(path, "rb") as f:
             data = tomllib.load(f)
-    except (OSError, tomllib.TOMLDecodeError):
+    except (OSError, getattr(tomllib, "TOMLDecodeError", Exception)):
         return BeerNetworkConfig(source_path=str(path))
 
     return _parse_config(data, source_path=str(path))
@@ -115,9 +113,7 @@ def _parse_config(
 
     focus_apps_raw = focus.get("apps", [])
     if isinstance(focus_apps_raw, str):
-        focus_apps = tuple(
-            app.strip() for app in focus_apps_raw.split(",") if app.strip()
-        )
+        focus_apps = tuple(app.strip() for app in focus_apps_raw.split(",") if app.strip())
     elif isinstance(focus_apps_raw, list):
         focus_apps = tuple(str(app) for app in focus_apps_raw if app)
     else:

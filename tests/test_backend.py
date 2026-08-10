@@ -19,10 +19,10 @@ from beer_network.backend import (
 
 @pytest.fixture(autouse=True)
 def run_worker_calls_inline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Avoid a Python 3.14 executor-shutdown issue in the sandboxed test runner."""
+    """Avoid an executor-shutdown issue in test environments."""
 
-    async def inline_to_thread(function: Callable[[], Any]) -> Any:
-        return function()
+    async def inline_to_thread(function: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        return function(*args, **kwargs)
 
     monkeypatch.setattr(asyncio, "to_thread", inline_to_thread)
 
