@@ -919,6 +919,15 @@ class BeerNetworkApp(App[None]):
         self._render_status(snapshot)
 
     def _render_processes(self, processes: tuple[ProcessSnapshot, ...]) -> None:
+        processes = tuple(
+            sorted(
+                processes,
+                key=lambda p: (
+                    p.estimated_upload_bytes_per_second + p.estimated_download_bytes_per_second
+                ),
+                reverse=True,
+            )
+        )
         selected = self._selected_process()
         selected_identity = (
             _process_identity(selected) if selected is not None else self._selected_identity
@@ -994,6 +1003,10 @@ class BeerNetworkApp(App[None]):
         previous_row: int,
     ) -> bool:
         table = self.query_one(f"#{table_id}", DataTable)
+
+        scroll_x = table.scroll_x
+        scroll_y = table.scroll_y
+
         table.clear()
         process_tuple = tuple(processes)
         self._table_processes[table_id] = process_tuple
@@ -1013,13 +1026,15 @@ class BeerNetworkApp(App[None]):
             if target_row is None:
                 target_row = min(max(previous_row, 0), table.row_count - 1)
             table.move_cursor(row=target_row, animate=False)
+            table.scroll_to(x=scroll_x, y=scroll_y, animate=False)
+
         return selected_row is not None
 
     def _process_cells(self, process: ProcessSnapshot) -> tuple[object, ...]:
         compact = bool(self._compact_layout)
-        
+
         name = Text(process.name, overflow="ellipsis", no_wrap=True, style="bold white")
-        
+
         raw_status = _display_status(process)
         status = Text(raw_status, overflow="ellipsis", no_wrap=True)
         if "running" in raw_status:
@@ -1055,7 +1070,7 @@ class BeerNetworkApp(App[None]):
             remote.stylize("dim")
 
         conn_count = Text(str(process.connection_count), style="bold cyan")
-        
+
         if compact:
             return (
                 process.pid,
@@ -1065,9 +1080,9 @@ class BeerNetworkApp(App[None]):
                 speed,
                 remote,
             )
-            
+
         user = Text(process.username, overflow="ellipsis", no_wrap=True, style="dim")
-        
+
         return (
             process.pid,
             name,
