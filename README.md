@@ -42,8 +42,31 @@ Installing the package also provides the `beer-network` command.
 - `G`: toggle Geo-IP enrichment
 - `K`: terminate the selected process after confirmation
 - `S`: suspend the selected process after confirmation
+- `U`: resume the selected suspended process after confirmation
+- `D`: view read-only process details modal (sockets, ports, states)
+- `E`: export snapshot to JSON Lines and CSV (`~/.beer-network/exports/`)
 - `A`: analyze the selected process with the configured AI provider
 - `Q`: quit
+
+## Configuration file
+
+Beer-Network supports a TOML configuration file at `~/.config/beer-network/config.toml` or `~/.beer-network/config.toml`. See `beer-network.example.toml` for options. You can also specify a custom path with `BEER_NETWORK_CONFIG`:
+
+```bash
+export BEER_NETWORK_CONFIG="/path/to/config.toml"
+```
+
+## Interface filtering
+
+Exclude or include specific network interfaces by setting `BEER_NETWORK_INTERFACE_FILTER`:
+
+```bash
+# Exclude common virtual/container/VPN interfaces (docker, veth, lo, tun, etc.)
+export BEER_NETWORK_INTERFACE_FILTER="no-virtual"
+
+# Exclude custom interfaces by regex
+export BEER_NETWORK_INTERFACE_FILTER="exclude:docker,veth,virbr"
+```
 
 ## Focus mode configuration
 
