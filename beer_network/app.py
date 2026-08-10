@@ -20,7 +20,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Footer, Header, Sparkline, Static
+from textual.widgets import Button, DataTable, Footer, Header, Input, Sparkline, Static
 
 from beer_network.ai_analysis import AIAnalysisResult, AIAnalysisService
 from beer_network.backend import NetworkSnapshot, ProcessSnapshot, PsutilNetworkBackend
@@ -460,9 +460,16 @@ class ProcessDetailsScreen(ModalScreen[None]):
     }
     """
 
-    def __init__(self, process: ProcessSnapshot) -> None:
+    def __init__(
+        self,
+        process: ProcessSnapshot,
+        upload_history: tuple[float, ...],
+        download_history: tuple[float, ...],
+    ) -> None:
         super().__init__()
         self.process = process
+        self.upload_history = upload_history
+        self.download_history = download_history
 
     def compose(self) -> ComposeResult:
         """Build the details dialog."""
@@ -481,6 +488,21 @@ class ProcessDetailsScreen(ModalScreen[None]):
                 f"Est. Download: {format_rate(self.process.estimated_download_bytes_per_second)}"
             )
             yield Static(Text(info), id="process-details-info")
+
+            yield Static("Upload History", classes="metric-name")
+            yield Sparkline(
+                self.upload_history,
+                min_color="#4b8bd8",
+                max_color="#5eead4",
+                classes="metric-sparkline",
+            )
+            yield Static("Download History", classes="metric-name")
+            yield Sparkline(
+                self.download_history,
+                min_color="#4b8bd8",
+                max_color="#f9a8d4",
+                classes="metric-sparkline",
+            )
 
             table: DataTable[str] = DataTable(id="process-details-table")
             table.add_columns("Local", "Remote", "Family", "Type", "Status")
@@ -514,12 +536,14 @@ class BeerNetworkApp(App[None]):
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh_now", "Refresh"),
         Binding("g", "toggle_geoip", "Geo-IP"),
+        Binding("f", "focus_search", "Search"),
         Binding("a", "analyze_process", "AI Analyze"),
         Binding("k", "terminate_process", "Kill"),
         Binding("s", "suspend_process", "Suspend"),
         Binding("u", "resume_process", "Resume"),
         Binding("d", "show_details", "Details"),
         Binding("e", "export_snapshot", "Export"),
+        Binding("escape", "clear_search", "Clear Search", show=False),
     ]
 
     CSS = """
@@ -608,6 +632,12 @@ class BeerNetworkApp(App[None]):
         scrollbar-size-horizontal: 1;
         scrollbar-size-vertical: 1;
     }
+    
+    #search-input {
+        display: none;
+        height: 3;
+        margin-bottom: 1;
+    }
     """
 
     def __init__(
@@ -668,6 +698,10 @@ class BeerNetworkApp(App[None]):
         self._geoip_pending_hosts: set[str] = set()
         self._geoip_lookup_running = False
         self._geoip_generation = 0
+        self._history_size = history_size
+        self._process_upload_history: dict[int, deque[float]] = {}
+        self._process_download_history: dict[int, deque[float]] = {}
+        self._search_query: str = ""
 
     def compose(self) -> ComposeResult:
         """Create the dashboard widgets."""
@@ -699,6 +733,7 @@ class BeerNetworkApp(App[None]):
         yield Static("Waiting for the first network sample...", id="status")
         with Vertical(id="normal-process-layout"):
             yield Static("Active Process Traffic", classes="section-title")
+            yield Input(placeholder="Search processes... (Press Esc to cancel)", id="search-input")
             yield DataTable(id="process-table", cursor_type="row", zebra_stripes=True)
         with Vertical(id="focus-process-layout"):
             yield Static("FOCUS MODE", id="focus-mode-banner")
@@ -712,6 +747,10 @@ class BeerNetworkApp(App[None]):
         """Configure process tables and begin background sampling."""
 
         self.query_one("#focus-process-layout", Vertical).display = False
+        search_input = self.query_one("#search-input", Input)
+        search_input.display = False
+        self.query_one("#process-table", DataTable).focus()
+        
         self._configure_process_tables(self.size.width <= _COMPACT_LAYOUT_MAX_WIDTH)
         self.set_interval(
             self.poll_interval,
@@ -796,6 +835,27 @@ class BeerNetworkApp(App[None]):
 
         self._request_process_action("resume")
 
+    def action_focus_search(self) -> None:
+        search_input = self.query_one("#search-input", Input)
+        search_input.display = True
+        search_input.focus()
+
+    def action_clear_search(self) -> None:
+        search_input = self.query_one("#search-input", Input)
+        if search_input.has_focus or self._search_query:
+            search_input.value = ""
+            search_input.display = False
+            self._search_query = ""
+            if self._latest_snapshot:
+                self._render_processes(self._latest_snapshot.processes)
+            self.query_one(f"#{self._last_active_table_id}", DataTable).focus()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "search-input":
+            self._search_query = event.value
+            if self._latest_snapshot:
+                self._render_processes(self._latest_snapshot.processes)
+
     def action_analyze_process(self) -> None:
         """Analyze the selected immutable snapshot with the optional AI service."""
 
@@ -842,7 +902,10 @@ class BeerNetworkApp(App[None]):
                 severity="warning",
             )
             return
-        self.push_screen(ProcessDetailsScreen(process_snapshot))
+
+        up_hist = tuple(self._process_upload_history.get(process_snapshot.pid, (0.0,)))
+        down_hist = tuple(self._process_download_history.get(process_snapshot.pid, (0.0,)))
+        self.push_screen(ProcessDetailsScreen(process_snapshot, up_hist, down_hist))
 
     def action_export_snapshot(self) -> None:
         if self._latest_snapshot is None:
@@ -915,10 +978,35 @@ class BeerNetworkApp(App[None]):
         self.query_one("#upload-sparkline", Sparkline).data = tuple(self._upload_history)
         self.query_one("#download-sparkline", Sparkline).data = tuple(self._download_history)
 
+        current_pids = {p.pid for p in snapshot.processes}
+        for p in snapshot.processes:
+            if p.pid not in self._process_upload_history:
+                self._process_upload_history[p.pid] = deque(
+                    [0.0] * self._history_size, maxlen=self._history_size
+                )
+                self._process_download_history[p.pid] = deque(
+                    [0.0] * self._history_size, maxlen=self._history_size
+                )
+            self._process_upload_history[p.pid].append(
+                max(0.0, p.estimated_upload_bytes_per_second)
+            )
+            self._process_download_history[p.pid].append(
+                max(0.0, p.estimated_download_bytes_per_second)
+            )
+
+        for pid in list(self._process_upload_history.keys()):
+            if pid not in current_pids:
+                del self._process_upload_history[pid]
+                del self._process_download_history[pid]
+
         self._render_processes(snapshot.processes)
         self._render_status(snapshot)
 
     def _render_processes(self, processes: tuple[ProcessSnapshot, ...]) -> None:
+        if self._search_query:
+            query = self._search_query.casefold()
+            processes = tuple(p for p in processes if query in p.name.casefold())
+
         processes = tuple(
             sorted(
                 processes,
@@ -1033,7 +1121,19 @@ class BeerNetworkApp(App[None]):
     def _process_cells(self, process: ProcessSnapshot) -> tuple[object, ...]:
         compact = bool(self._compact_layout)
 
-        name = Text(process.name, overflow="ellipsis", no_wrap=True, style="bold white")
+        HIGH_TRAFFIC = 5 * 1024 * 1024
+        is_high_traffic = (
+            process.estimated_upload_bytes_per_second >= HIGH_TRAFFIC
+            or process.estimated_download_bytes_per_second >= HIGH_TRAFFIC
+        )
+
+        display_name = f"🚨 {process.name}" if is_high_traffic else process.name
+        name = Text(
+            display_name,
+            overflow="ellipsis",
+            no_wrap=True,
+            style="bold red" if is_high_traffic else "bold white",
+        )
 
         raw_status = _display_status(process)
         status = Text(raw_status, overflow="ellipsis", no_wrap=True)
@@ -1050,17 +1150,29 @@ class BeerNetworkApp(App[None]):
 
         upload = format_rate(process.estimated_upload_bytes_per_second)
         download = format_rate(process.estimated_download_bytes_per_second)
+
+        up_style = (
+            "bold red"
+            if process.estimated_upload_bytes_per_second >= HIGH_TRAFFIC
+            else "bold green"
+        )
+        down_style = (
+            "bold red"
+            if process.estimated_download_bytes_per_second >= HIGH_TRAFFIC
+            else "bold magenta"
+        )
+
         speed = Text(overflow="ellipsis", no_wrap=True)
         if compact:
-            speed.append("↑", style="bold green")
+            speed.append("↑", style=up_style)
             speed.append(f"{upload} ")
-            speed.append("↓", style="bold magenta")
+            speed.append("↓", style=down_style)
             speed.append(f"{download}")
         else:
             speed.append("Up ", style="dim")
-            speed.append(f"{upload} ", style="bold green")
+            speed.append(f"{upload} ", style=up_style)
             speed.append("/ Down ", style="dim")
-            speed.append(f"{download}", style="bold magenta")
+            speed.append(f"{download}", style=down_style)
 
         remote_text = self._format_remote_endpoint(process)
         remote = Text(remote_text, overflow="ellipsis", no_wrap=True)
