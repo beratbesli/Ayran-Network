@@ -1017,33 +1017,63 @@ class BeerNetworkApp(App[None]):
 
     def _process_cells(self, process: ProcessSnapshot) -> tuple[object, ...]:
         compact = bool(self._compact_layout)
-        name_length = 14 if compact else 18
-        status_length = 8 if compact else 10
-        speed_length = 17 if compact else 22
-        remote_length = 16 if compact else 28
-        name = _ellipsized_text(process.name, name_length)
-        status = _ellipsized_text(_display_status(process), status_length)
-        speed = _ellipsized_text(
-            _format_estimated_speed(process, compact=compact),
-            speed_length,
-        )
-        remote = _ellipsized_text(self._format_remote_endpoint(process), remote_length)
+        
+        name = Text(process.name, overflow="ellipsis", no_wrap=True, style="bold white")
+        
+        raw_status = _display_status(process)
+        status = Text(raw_status, overflow="ellipsis", no_wrap=True)
+        if "running" in raw_status:
+            status.stylize("bold green")
+        elif "sleeping" in raw_status:
+            status.stylize("cyan")
+        elif "suspended" in raw_status or "stopped" in raw_status:
+            status.stylize("bold yellow")
+        elif "zombie" in raw_status or "dead" in raw_status:
+            status.stylize("bold red")
+        else:
+            status.stylize("dim white")
 
+        upload = format_rate(process.estimated_upload_bytes_per_second)
+        download = format_rate(process.estimated_download_bytes_per_second)
+        speed = Text(overflow="ellipsis", no_wrap=True)
+        if compact:
+            speed.append("↑", style="bold green")
+            speed.append(f"{upload} ")
+            speed.append("↓", style="bold magenta")
+            speed.append(f"{download}")
+        else:
+            speed.append("Up ", style="dim")
+            speed.append(f"{upload} ", style="bold green")
+            speed.append("/ Down ", style="dim")
+            speed.append(f"{download}", style="bold magenta")
+
+        remote_text = self._format_remote_endpoint(process)
+        remote = Text(remote_text, overflow="ellipsis", no_wrap=True)
+        if "—" not in remote_text:
+            remote.stylize("bright_blue")
+        else:
+            remote.stylize("dim")
+
+        conn_count = Text(str(process.connection_count), style="bold cyan")
+        
         if compact:
             return (
                 process.pid,
                 name,
                 status,
-                process.connection_count,
+                conn_count,
                 speed,
                 remote,
             )
+            
+        user = Text(process.username, overflow="ellipsis", no_wrap=True, style="dim")
+        
         return (
             process.pid,
             name,
-            _ellipsized_text(process.username, 14),
+            user,
             status,
-            process.connection_count,
+            conn_count,
             speed,
             remote,
         )

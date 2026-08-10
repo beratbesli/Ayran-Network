@@ -323,8 +323,8 @@ async def test_snapshot_updates_metrics_sparklines_and_process_table() -> None:
         assert str(row[1]) == "web-browser"
         assert str(row[2]) == "alex"
         assert str(row[3]) == "running"
-        assert row[4] == 3
-        assert str(row[5]) == "Up 4.0 KiB/s / Down 8…"
+        assert str(row[4]) == "3"
+        assert str(row[5]) == "Up 4.0 KiB/s / Down 8.0 KiB/s"
         assert str(row[6]) == "—"
         assert str(app.query_one("#status", Static).render()) == (
             "Monitoring 1 network-active process."
