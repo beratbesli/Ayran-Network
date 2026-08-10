@@ -1,0 +1,33 @@
+# Beer-Network Configuration File
+# Copy to ~/.config/beer-network/config.toml
+
+[general]
+poll_interval = 1.0
+history_size = 60
+
+[focus]
+# Comma-separated or list of app names to focus on
+apps = ["BeamNG.drive", "Elden Ring", "Fortnite"]
+# Set to false to replace defaults instead of extending
+extend_defaults = true
+
+[geoip]
+enabled = true
+
+[interface]
+# Filter mode: 'no-virtual', 'exclude:pattern1,pattern2', or 'include:pattern1,pattern2'
+filter = ""
+
+[ai]
+# Groq provider
+# groq_api_key = "your-key"
+# groq_model = "llama-3.3-70b-versatile"
+
+# Local OpenAI-compatible provider  
+# llm_base_url = "http://127.0.0.1:11434/v1"
+# llm_model = "your-local-model"
+# llm_api_key = ""
+
+[export]
+# Export directory (default: ~/.beer-network/exports)
+# directory = "~/.beer-network/exports"
