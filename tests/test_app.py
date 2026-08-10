@@ -109,6 +109,16 @@ class FakeProcessController:
     ) -> ProcessActionResult:
         return self._result("suspend", pid, expected_name, expected_create_time)
 
+    async def resume(
+        self,
+        pid: int,
+        *,
+        expected_name: str | None = None,
+        expected_create_time: float | None = None,
+    ) -> ProcessActionResult:
+        return self._result("resume", pid, expected_name, expected_create_time)
+
+
     def _result(
         self,
         action: ProcessAction,

@@ -4,30 +4,33 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, TypeVar
 
-__all__ = ["InterfaceFilter", "INTERFACE_FILTER_ENV"]
+__all__ = ["INTERFACE_FILTER_ENV", "InterfaceFilter"]
 
 INTERFACE_FILTER_ENV: Final = "BEER_NETWORK_INTERFACE_FILTER"
 
+T = TypeVar("T")
+
 # Common patterns for virtual/container/VPN interfaces
 _VIRTUAL_PATTERNS: Final[tuple[str, ...]] = (
-    r"^lo$",           # loopback
-    r"^docker\d*$",    # Docker bridge
-    r"^br-",           # Docker custom bridges
-    r"^veth",          # Docker/container veth pairs
-    r"^virbr",         # libvirt bridges
-    r"^vnet",          # libvirt virtual NICs
-    r"^tun\d*$",       # VPN tunnels
-    r"^tap\d*$",       # VPN taps
-    r"^wg\d*$",        # WireGuard
-    r"^tailscale\d*$", # Tailscale
-    r"^nordlynx$",     # NordVPN
-    r"^cni\d*$",       # Kubernetes CNI
-    r"^flannel",       # Flannel overlay
-    r"^calico",        # Calico
-    r"^dummy\d*$",     # Dummy interfaces
+    r"^lo$",  # loopback
+    r"^docker\d*$",  # Docker bridge
+    r"^br-",  # Docker custom bridges
+    r"^veth",  # Docker/container veth pairs
+    r"^virbr",  # libvirt bridges
+    r"^vnet",  # libvirt virtual NICs
+    r"^tun\d*$",  # VPN tunnels
+    r"^tap\d*$",  # VPN taps
+    r"^wg\d*$",  # WireGuard
+    r"^tailscale\d*$",  # Tailscale
+    r"^nordlynx$",  # NordVPN
+    r"^cni\d*$",  # Kubernetes CNI
+    r"^flannel",  # Flannel overlay
+    r"^calico",  # Calico
+    r"^dummy\d*$",  # Dummy interfaces
 )
 
 
@@ -41,7 +44,7 @@ class InterfaceFilter:
     @classmethod
     def from_environment(
         cls,
-        environ: dict[str, str] | None = None,
+        environ: Mapping[str, str] | None = None,
     ) -> InterfaceFilter:
         """Build an interface filter from BEER_NETWORK_INTERFACE_FILTER.
 
@@ -56,10 +59,7 @@ class InterfaceFilter:
             return cls()
 
         if raw.lower() == "no-virtual":
-            compiled = tuple(
-                re.compile(p, re.IGNORECASE)
-                for p in _VIRTUAL_PATTERNS
-            )
+            compiled = tuple(re.compile(p, re.IGNORECASE) for p in _VIRTUAL_PATTERNS)
             return cls(excluded_patterns=compiled)
 
         if raw.lower().startswith("exclude:"):
@@ -90,13 +90,10 @@ class InterfaceFilter:
 
         return True
 
-    def filter_interfaces(self, interfaces: dict[str, object]) -> dict[str, object]:
+    def filter_interfaces(self, interfaces: Mapping[str, T]) -> dict[str, T]:
         """Filter a dictionary of interfaces by name."""
-        return {
-            name: data
-            for name, data in interfaces.items()
-            if self.should_include(name)
-        }
+        return {name: data for name, data in interfaces.items() if self.should_include(name)}
+
 
 
 def _compile_patterns(patterns_str: str) -> tuple[re.Pattern[str], ...]:

@@ -6,7 +6,7 @@ from beer_network.backend import GlobalRates, NetworkSnapshot, ProcessSnapshot
 from beer_network.export import export_csv, export_json
 
 
-def test_export_json():
+def test_export_json() -> None:
     """Test exporting a snapshot to JSON."""
     snapshot = NetworkSnapshot(
         sampled_at=1620000000.0,
@@ -37,10 +37,10 @@ def test_export_json():
         limited_access=False,
         warnings=(),
     )
-    
+
     result = export_json(snapshot)
     data = json.loads(result)
-    
+
     assert data["sampled_at"] == 1620000000.0
     assert data["global_rates"]["upload_bytes_per_second"] == 100.0
     assert len(data["processes"]) == 1
@@ -48,7 +48,8 @@ def test_export_json():
     assert data["processes"][0]["name"] == "test_process"
 
 
-def test_export_csv():
+def test_export_csv() -> None:
+
     """Test exporting a snapshot to CSV."""
     snapshot = NetworkSnapshot(
         sampled_at=1620000000.0,
