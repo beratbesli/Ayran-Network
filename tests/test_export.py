@@ -1,7 +1,6 @@
 """Tests for the export functionality."""
 
 import json
-from unittest.mock import Mock
 
 from beer_network.backend import GlobalRates, NetworkSnapshot, ProcessSnapshot
 from beer_network.export import export_csv, export_json
@@ -83,5 +82,12 @@ def test_export_csv():
     
     result = export_csv(snapshot)
     
-    assert "timestamp,pid,name,username,status,connections,established,listening,estimated_upload_bps,estimated_download_bps,global_upload_bps,global_download_bps,total_bytes_sent,total_bytes_received" in result
-    assert "123,test_process,test_user,running,0,0,0,10.0,20.0,100.0,200.0,1000,2000" in result
+    assert (
+        "timestamp,pid,name,username,status,connections,established,listening,"
+        "estimated_upload_bps,estimated_download_bps,global_upload_bps,"
+        "global_download_bps,total_bytes_sent,total_bytes_received"
+    ) in result
+    assert (
+        "123,test_process,test_user,running,0,0,0,10.0,20.0,100.0,200.0,1000,2000"
+    ) in result
+

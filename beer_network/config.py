@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
@@ -65,11 +65,12 @@ def load_config(
     if path is None:
         return BeerNetworkConfig()
 
-    try:
+    import sys
+    if sys.version_info >= (3, 11):
         import tomllib
-    except ModuleNotFoundError:
+    else:
         try:
-            import tomli as tomllib  # type: ignore[no-redef]
+            import tomli as tomllib  # type: ignore[import-not-found]
         except ModuleNotFoundError:
             return BeerNetworkConfig(source_path=str(path))
 

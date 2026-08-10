@@ -482,7 +482,7 @@ class ProcessDetailsScreen(ModalScreen[None]):
             )
             yield Static(Text(info), id="process-details-info")
             
-            table = DataTable(id="process-details-table")
+            table: DataTable[str] = DataTable(id="process-details-table")
             table.add_columns("Local", "Remote", "Family", "Type", "Status")
             for c in self.process.connections:
                 local = _format_endpoint(c.local_host, c.local_port) if c.local_host else "—"
@@ -852,7 +852,6 @@ class BeerNetworkApp(App[None]):
 
     @work(exclusive=True, group="export")
     async def _do_export(self, snapshot: NetworkSnapshot) -> None:
-        import os
         from pathlib import Path
         try:
             export_dir = Path.home() / ".beer-network" / "exports"
