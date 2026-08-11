@@ -356,7 +356,6 @@ class BeerNetworkApp(App[None]):
         Binding("r", "refresh_now", "Refresh"),
         Binding("g", "toggle_geoip", "Geo-IP"),
         Binding("f", "focus_search", "Search"),
-        Binding("a", "analyze_process", "AI Analyze"),
         Binding("k", "terminate_process", "Kill"),
         Binding("s", "suspend_process", "Suspend"),
         Binding("u", "resume_process", "Resume"),
@@ -442,7 +441,13 @@ class BeerNetworkApp(App[None]):
         height: 1fr;
     }
 
-    #focused-process-table, #background-process-table {
+    #focused-process-table {
+        height: auto;
+        max-height: 50%;
+        min-height: 3;
+    }
+
+    #background-process-table {
         height: 1fr;
         min-height: 3;
     }

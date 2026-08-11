@@ -369,7 +369,7 @@ def test_constructor_validates_polling_configuration_and_declares_keys() -> None
         BeerNetworkApp(history_size=1)
 
     keys = {binding.key for binding in BeerNetworkApp.BINDINGS if isinstance(binding, Binding)}
-    assert {"q", "r", "g", "a", "k", "s"} <= keys
+    assert {"q", "r", "g", "k", "s"} <= keys
 
 
 @pytest.mark.asyncio
