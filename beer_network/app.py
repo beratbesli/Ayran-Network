@@ -1006,7 +1006,7 @@ class BeerNetworkApp(App[None]):
         names = ", ".join(selection.matched_names)
         banner.update(_ellipsized_text(f"FOCUS MODE · {names}", 72))
 
-    def _table_is_active(self, table: "DataTable[object]") -> bool:
+    def _table_is_active(self, table: DataTable[object]) -> bool:
         table_id = table.id
         if table_id == "process-table":
             return not self._focus_mode_active
