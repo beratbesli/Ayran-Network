@@ -7,11 +7,12 @@ from typing import TypeAlias
 import pytest
 from textual.binding import Binding
 from textual.containers import Vertical
-from textual.widgets import DataTable, Sparkline, Static
+from textual.widgets import Sparkline, Static
 
 from beer_network.app import (
     BeerNetworkApp,
     ProcessActionConfirmScreen,
+    ProcessTable,
     format_bytes,
     format_rate,
 )
@@ -249,7 +250,7 @@ async def test_snapshot_updates_metrics_sparklines_and_process_table() -> None:
             2 * 1024 * 1024.0,
         )
 
-        table = app.query_one("#process-table", DataTable)
+        table = app.query_one("#process-table", ProcessTable)
         assert [str(column.label) for column in table.ordered_columns] == [
             "PID",
             "Name",
@@ -282,7 +283,7 @@ async def test_manual_refresh_preserves_selected_pid_when_rows_reorder() -> None
 
     async with app.run_test(size=(110, 28)) as pilot:
         await finish_refresh(app)
-        table = app.query_one("#process-table", DataTable)
+        table = app.query_one("#process-table", ProcessTable)
         table.move_cursor(row=1, animate=False)
 
         await pilot.press("r")
@@ -313,7 +314,7 @@ async def test_slow_sampling_runs_in_background_without_overlapping_refreshes() 
         await finish_refresh(app)
         await pilot.pause()
 
-        assert app.query_one("#process-table", DataTable).row_count == 1
+        assert app.query_one("#process-table", ProcessTable).row_count == 1
 
 
 @pytest.mark.asyncio
@@ -335,7 +336,7 @@ async def test_limited_access_warning_is_visible_without_hiding_rows() -> None:
         status = app.query_one("#status", Static)
         assert str(status.render()) == f"Limited access: {warning} (+1 more)"
         assert status.has_class("warning")
-        table = app.query_one("#process-table", DataTable)
+        table = app.query_one("#process-table", ProcessTable)
         assert table.row_count == 1
         assert str(table.get_row_at(0)[3]).startswith("limited")
 
@@ -357,7 +358,7 @@ async def test_sampling_error_is_reported_and_next_refresh_can_recover() -> None
         await finish_refresh(app)
         await pilot.pause()
 
-        assert app.query_one("#process-table", DataTable).row_count == 1
+        assert app.query_one("#process-table", ProcessTable).row_count == 1
         assert str(status.render()) == "Monitoring 1 network-active process."
         assert not status.has_class("error")
 
@@ -392,7 +393,7 @@ async def test_focus_mode_splits_tables_and_preserves_selection_at_80_columns() 
 
     async with app.run_test(size=(80, 24)) as pilot:
         await finish_refresh(app)
-        normal_table = app.query_one("#process-table", DataTable)
+        normal_table = app.query_one("#process-table", ProcessTable)
         normal_table.move_cursor(row=1, animate=False)
         normal_table.focus()
         await pilot.pause()
@@ -407,8 +408,8 @@ async def test_focus_mode_splits_tables_and_preserves_selection_at_80_columns() 
         assert is_displayed(focus_layout)
         assert "game.exe" in str(app.query_one("#focus-mode-banner", Static).render())
 
-        focused_table = app.query_one("#focused-process-table", DataTable)
-        background_table = app.query_one("#background-process-table", DataTable)
+        focused_table = app.query_one("#focused-process-table", ProcessTable)
+        background_table = app.query_one("#background-process-table", ProcessTable)
         assert [focused_table.get_row_at(index)[0] for index in range(focused_table.row_count)] == [
             30
         ]
@@ -469,7 +470,7 @@ async def test_geoip_defaults_on_deduplicates_hosts_and_updates_flags(
         await finish_refresh(app)
         await pilot.pause()
 
-        table = app.query_one("#process-table", DataTable)
+        table = app.query_one("#process-table", ProcessTable)
         assert resolver.calls == [host]
         assert str(table.get_row_at(0)[6]) == "🇺🇸 8.8.8.8:443"
         assert str(table.get_row_at(1)[6]) == "🇺🇸 8.8.8.8:53"
@@ -501,7 +502,7 @@ async def test_geoip_environment_toggle_disables_and_restores_flag_display(
 
     async with app.run_test(size=(120, 28)) as pilot:
         await finish_refresh(app)
-        table = app.query_one("#process-table", DataTable)
+        table = app.query_one("#process-table", ProcessTable)
         assert resolver.calls == []
         assert str(table.get_row_at(0)[6]) == "1.1.1.1:443"
 
@@ -572,7 +573,7 @@ async def test_process_action_requires_confirmation_and_uses_snapshot_identity()
 
     async with app.run_test(size=(120, 28)) as pilot:
         await finish_refresh(app)
-        table = app.query_one("#process-table", DataTable)
+        table = app.query_one("#process-table", ProcessTable)
         table.focus()
 
         await pilot.press("k")
@@ -644,7 +645,7 @@ async def test_process_controller_failure_is_reported_as_error_notification() ->
 
     async with app.run_test(size=(120, 26)) as pilot:
         await finish_refresh(app)
-        app.query_one("#process-table", DataTable).focus()
+        app.query_one("#process-table", ProcessTable).focus()
         await pilot.press("k")
         await pilot.pause()
         await pilot.press("y")

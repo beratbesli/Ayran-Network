@@ -323,7 +323,7 @@ class ProcessDetailsScreen(ModalScreen[None]):
                 classes="metric-sparkline",
             )
 
-            table: DataTable[str] = DataTable(id="process-details-table")
+            table = ProcessTable(id="process-details-table")
             table.add_columns("Local", "Remote", "Family", "Type", "Status")
             for c in self.process.connections:
                 local = _format_endpoint(c.local_host, c.local_port) if c.local_host else "—"
@@ -344,6 +344,34 @@ class ProcessDetailsScreen(ModalScreen[None]):
         """Close the dialog."""
         self.dismiss()
 
+
+class ProcessTable(DataTable[object]):
+    def action_cursor_down(self, **kwargs: object) -> None:
+        old_row = self.cursor_row
+        # Wait for textual to do cursor down
+        super().action_cursor_down(**kwargs)
+        if (
+            self.cursor_row == old_row
+            and self.cursor_row >= self.row_count - 1
+            and self.id == "focused-process-table"
+        ):
+                bg = self.app.query_one("#background-process-table", ProcessTable)
+                bg.focus()
+                if bg.row_count:
+                    bg.move_cursor(row=0, animate=False)
+
+    def action_cursor_up(self, **kwargs: object) -> None:
+        old_row = self.cursor_row
+        super().action_cursor_up(**kwargs)
+        if (
+            self.cursor_row == old_row
+            and self.cursor_row <= 0
+            and self.id == "background-process-table"
+        ):
+                fg = self.app.query_one("#focused-process-table", ProcessTable)
+                fg.focus()
+                if fg.row_count:
+                    fg.move_cursor(row=fg.row_count - 1, animate=False)
 
 class BeerNetworkApp(App[None]):
     """A live terminal dashboard for global and per-process network activity."""
@@ -553,13 +581,13 @@ class BeerNetworkApp(App[None]):
         with Vertical(id="normal-process-layout"):
             yield Static("Active Process Traffic", classes="section-title")
             yield Input(placeholder="Search processes... (Press Esc to cancel)", id="search-input")
-            yield DataTable(id="process-table", cursor_type="row", zebra_stripes=True)
+            yield ProcessTable(id="process-table", cursor_type="row", zebra_stripes=True)
         with Vertical(id="focus-process-layout"):
             yield Static("FOCUS MODE", id="focus-mode-banner")
             yield Static("Focused App Traffic", classes="section-title")
-            yield DataTable(id="focused-process-table", cursor_type="row", zebra_stripes=True)
+            yield ProcessTable(id="focused-process-table", cursor_type="row", zebra_stripes=True)
             yield Static("Background Noise", classes="section-title")
-            yield DataTable(id="background-process-table", cursor_type="row", zebra_stripes=True)
+            yield ProcessTable(id="background-process-table", cursor_type="row", zebra_stripes=True)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -568,7 +596,7 @@ class BeerNetworkApp(App[None]):
         self.query_one("#focus-process-layout", Vertical).display = False
         search_input = self.query_one("#search-input", Input)
         search_input.display = False
-        self.query_one("#process-table", DataTable).focus()
+        self.query_one("#process-table", ProcessTable).focus()
 
         self._configure_process_tables(self.size.width <= _COMPACT_LAYOUT_MAX_WIDTH)
         self.set_interval(
@@ -659,7 +687,7 @@ class BeerNetworkApp(App[None]):
             self._search_query = ""
             if self._latest_snapshot:
                 self._render_processes(self._latest_snapshot.processes)
-            self.query_one(f"#{self._last_active_table_id}", DataTable).focus()
+            self.query_one(f"#{self._last_active_table_id}", ProcessTable).focus()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "search-input":
@@ -790,7 +818,7 @@ class BeerNetworkApp(App[None]):
             _process_identity(selected) if selected is not None else self._selected_identity
         )
         previous_rows = {
-            table_id: self.query_one(f"#{table_id}", DataTable).cursor_row
+            table_id: self.query_one(f"#{table_id}", ProcessTable).cursor_row
             for table_id in _PROCESS_TABLE_IDS
         }
         focus_selection = self.classifier.split(processes)
@@ -844,8 +872,8 @@ class BeerNetworkApp(App[None]):
             _process_identity(selected_after_render) if selected_after_render is not None else None
         )
 
-        if focus_changed and isinstance(previously_focused, DataTable):
-            target = self.query_one(f"#{self._last_active_table_id}", DataTable)
+        if focus_changed and isinstance(previously_focused, ProcessTable):
+            target = self.query_one(f"#{self._last_active_table_id}", ProcessTable)
             if target.row_count:
                 target.focus()
 
@@ -859,7 +887,7 @@ class BeerNetworkApp(App[None]):
         selected_identity: tuple[int, float | None] | None,
         previous_row: int,
     ) -> bool:
-        table = self.query_one(f"#{table_id}", DataTable)
+        table = self.query_one(f"#{table_id}", ProcessTable)
 
         scroll_x = table.scroll_x
         scroll_y = table.scroll_y
@@ -882,7 +910,7 @@ class BeerNetworkApp(App[None]):
             target_row = selected_row
             if target_row is None:
                 target_row = min(max(previous_row, 0), table.row_count - 1)
-            table.move_cursor(row=target_row, animate=False)
+            table.move_cursor(row=target_row, animate=False, scroll=False)
             self.call_later(table.scroll_to, x=scroll_x, y=scroll_y, animate=False)
 
         return selected_row is not None
@@ -960,7 +988,7 @@ class BeerNetworkApp(App[None]):
         self._rendering_tables = True
         try:
             for table_id in _PROCESS_TABLE_IDS:
-                table = self.query_one(f"#{table_id}", DataTable)
+                table = self.query_one(f"#{table_id}", ProcessTable)
                 table.clear(columns=True)
                 for label, key, width in columns:
                     table.add_column(label, key=key, width=width)
@@ -976,7 +1004,7 @@ class BeerNetworkApp(App[None]):
         names = ", ".join(selection.matched_names)
         banner.update(_ellipsized_text(f"FOCUS MODE · {names}", 72))
 
-    def _table_is_active(self, table: DataTable[object]) -> bool:
+    def _table_is_active(self, table: "DataTable[object]") -> bool:
         table_id = table.id
         if table_id == "process-table":
             return not self._focus_mode_active
@@ -987,7 +1015,7 @@ class BeerNetworkApp(App[None]):
 
     def _selected_process(self) -> ProcessSnapshot | None:
         focused = self.focused
-        if isinstance(focused, DataTable) and self._table_is_active(focused):
+        if isinstance(focused, ProcessTable) and self._table_is_active(focused):
             selected = self._process_at_cursor(focused)
             if selected is not None:
                 return selected
@@ -997,10 +1025,10 @@ class BeerNetworkApp(App[None]):
             table_id = "focused-process-table"
         elif not self._focus_mode_active:
             table_id = "process-table"
-        table = self.query_one(f"#{table_id}", DataTable)
+        table = self.query_one(f"#{table_id}", ProcessTable)
         return self._process_at_cursor(table)
 
-    def _process_at_cursor(self, table: DataTable[object]) -> ProcessSnapshot | None:
+    def _process_at_cursor(self, table: ProcessTable) -> ProcessSnapshot | None:
         processes = self._table_processes.get(table.id or "", ())
         if not table.row_count or not (0 <= table.cursor_row < len(processes)):
             return None
