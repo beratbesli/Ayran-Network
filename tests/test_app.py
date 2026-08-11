@@ -257,7 +257,7 @@ async def test_snapshot_updates_metrics_sparklines_and_process_table() -> None:
             "User",
             "Status",
             "Connections",
-            "Activity Score",
+            "Traffic Level",
             "Remote Endpoint",
         ]
         row = table.get_row_at(0)
@@ -266,7 +266,7 @@ async def test_snapshot_updates_metrics_sparklines_and_process_table() -> None:
         assert str(row[2]) == "alex"
         assert str(row[3]) == "running"
         assert str(row[4]) == "3"
-        assert str(row[5]) == "4096.0"
+        assert str(row[5]) == "🔴 High"
         assert str(row[6]) == "—"
         assert str(app.query_one("#status", Static).render()) == (
             "Monitoring 1 network-active process."

@@ -78,7 +78,7 @@ _WIDE_COLUMNS: Final[tuple[tuple[str, str, int], ...]] = (
     ("User", "user", 14),
     ("Status", "status", 10),
     ("Connections", "connections", 11),
-    ("Activity Score", "estimated-speed", 22),
+    ("Traffic Level", "estimated-speed", 18),
     ("Remote Endpoint", "remote-endpoint", 28),
 )
 _COMPACT_COLUMNS: Final[tuple[tuple[str, str, int], ...]] = (
@@ -311,11 +311,11 @@ class ProcessDetailsScreen(ModalScreen[None]):
                 f"Connections: {self.process.connection_count} "
                 f"(Established: {self.process.established_connection_count}, "
                 f"Listening: {self.process.listening_connection_count})\n"
-                f"Activity Score: {self.process.activity_score:.1f}"
+                f"Traffic Score: {self.process.activity_score:.1f}"
             )
             yield Static(Text(info), id="process-details-info")
 
-            yield Static("Activity History", classes="metric-name")
+            yield Static("Traffic History", classes="metric-name")
             yield Sparkline(
                 self.activity_history,
                 min_color="#4b8bd8",
@@ -941,13 +941,15 @@ class BeerNetworkApp(App[None]):
         else:
             status.stylize("dim white")
 
-        speed = Text(f"{process.activity_score:.1f}", overflow="ellipsis", no_wrap=True)
+
         if process.activity_score >= 10.0:
-            speed.stylize("bold red")
+            speed = Text("🔴 High", style="bold red", overflow="ellipsis", no_wrap=True)
+        elif process.activity_score >= 3.0:
+            speed = Text("🟡 Medium", style="bold yellow", overflow="ellipsis", no_wrap=True)
         elif process.activity_score > 0:
-            speed.stylize("bold green")
+            speed = Text("🟢 Low", style="bold green", overflow="ellipsis", no_wrap=True)
         else:
-            speed.stylize("dim")
+            speed = Text("⚪ Idle", style="dim white", overflow="ellipsis", no_wrap=True)
 
         remote_text = self._format_remote_endpoint(process)
         remote = Text(remote_text, overflow="ellipsis", no_wrap=True)
