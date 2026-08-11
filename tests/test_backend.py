@@ -200,10 +200,8 @@ async def test_process_connections_counts_and_connection_weighted_estimates(
     assert remote_connection.remote_host == "203.0.113.4"
     assert remote_connection.remote_port == 443
     assert browser.rate_estimate_basis == PROCESS_RATE_ESTIMATE_BASIS
-    assert browser.estimated_upload_bytes_per_second == pytest.approx(200.0)
-    assert browser.estimated_download_bytes_per_second == pytest.approx(400.0)
-    assert resolver.estimated_upload_bytes_per_second == pytest.approx(100.0)
-    assert resolver.estimated_download_bytes_per_second == pytest.approx(200.0)
+    assert browser.activity_score == pytest.approx(1.0)
+    assert resolver.activity_score == pytest.approx(0.5)
 
 
 @pytest.mark.asyncio

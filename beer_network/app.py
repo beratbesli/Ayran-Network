@@ -78,7 +78,7 @@ _WIDE_COLUMNS: Final[tuple[tuple[str, str, int], ...]] = (
     ("User", "user", 14),
     ("Status", "status", 10),
     ("Connections", "connections", 11),
-    ("Estimated Speed", "estimated-speed", 22),
+    ("Activity Score", "estimated-speed", 22),
     ("Remote Endpoint", "remote-endpoint", 28),
 )
 _COMPACT_COLUMNS: Final[tuple[tuple[str, str, int], ...]] = (
@@ -156,38 +156,6 @@ class ProcessControl(Protocol):
         expected_create_time: float | None = None,
     ) -> ProcessActionResult:
         """Resume a process after validating its identity."""
-
-        ...
-
-
-class AIAnalyzer(Protocol):
-    """The optional AI-analysis interface used by the application."""
-
-    @property
-    def available(self) -> bool:
-        """Return whether analysis is currently configured and available."""
-
-        ...
-
-    @property
-    def provider(self) -> str | None:
-        """Return the configured provider label, when available."""
-
-        ...
-
-    @property
-    def model(self) -> str | None:
-        """Return the configured model name, when available."""
-
-        ...
-
-    async def analyze(self, process: ProcessSnapshot) -> AIAnalysisResult:
-        """Analyze one immutable process snapshot."""
-
-        ...
-
-    async def aclose(self) -> None:
-        """Close resources owned by the analyzer."""
 
         ...
 
@@ -276,144 +244,6 @@ class ProcessActionConfirmScreen(ModalScreen[bool]):
         self.dismiss(False)
 
 
-class AIAnalysisScreen(ModalScreen[None]):
-    """Show a bounded, literal-text AI assessment for a captured process."""
-
-    BINDINGS = [Binding("escape", "close", "Close")]
-
-    CSS = """
-    AIAnalysisScreen {
-        align: center middle;
-        background: $background 70%;
-    }
-
-    #ai-analysis-dialog {
-        width: 82%;
-        min-width: 42;
-        max-width: 90;
-        height: auto;
-        max-height: 90%;
-        border: round $primary;
-        background: $surface;
-        padding: 1 2;
-    }
-
-    #ai-analysis-title {
-        height: 1;
-        text-style: bold;
-        color: $success;
-    }
-
-    #ai-analysis-title.failure {
-        color: $error;
-    }
-
-    #ai-analysis-process, #ai-analysis-provider {
-        height: auto;
-        color: $text-muted;
-    }
-
-    #ai-analysis-message {
-        height: auto;
-        min-height: 4;
-        margin: 1 0;
-        border: round $panel;
-        padding: 0 1;
-    }
-
-    #ai-analysis-privacy, #ai-analysis-advisory {
-        height: auto;
-        margin-top: 1;
-    }
-
-    #ai-analysis-privacy {
-        color: $text-muted;
-    }
-
-    #ai-analysis-advisory {
-        color: $warning;
-    }
-
-    #ai-analysis-buttons {
-        height: 3;
-        align-horizontal: right;
-    }
-    """
-
-    def __init__(self, process: ProcessSnapshot, result: AIAnalysisResult) -> None:
-        super().__init__()
-        self.process = process
-        self.result = result
-
-    def compose(self) -> ComposeResult:
-        """Build the assessment dialog without interpreting provider text as markup."""
-
-        success = self.result.success and self.result.analysis is not None
-        title = "AI Analysis Complete" if success else "AI Analysis Failed"
-        title_classes = None if success else "failure"
-        raw_body = self.result.analysis if success else self.result.error
-        body = _bounded_terminal_text(
-            raw_body or "",
-            _AI_RESULT_MAX_CHARACTERS,
-            preserve_newlines=True,
-        )
-        if not body.strip():
-            body = "AI analysis did not return a usable result."
-        provider = _bounded_terminal_text(
-            self.result.provider or "",
-            _AI_FIELD_MAX_CHARACTERS,
-        )
-        model = _bounded_terminal_text(
-            self.result.model or "",
-            _AI_FIELD_MAX_CHARACTERS,
-        )
-        process_name = _bounded_terminal_text(
-            self.process.name,
-            _AI_FIELD_MAX_CHARACTERS,
-        )
-        provider = provider or "Not reported"
-        model = model or "Not reported"
-        process_name = process_name or "unknown"
-
-        with VerticalScroll(id="ai-analysis-dialog"):
-            yield Static(
-                Text(title),
-                id="ai-analysis-title",
-                classes=title_classes,
-                markup=False,
-            )
-            yield Static(
-                Text(f"Process: {process_name} (PID {self.process.pid})"),
-                id="ai-analysis-process",
-                markup=False,
-            )
-            yield Static(
-                Text(f"Provider: {provider} | Model: {model}"),
-                id="ai-analysis-provider",
-                markup=False,
-            )
-            yield Static(
-                Text(body),
-                id="ai-analysis-message",
-                markup=False,
-            )
-            yield Static(Text(_AI_PRIVACY_NOTE), id="ai-analysis-privacy", markup=False)
-            yield Static(Text(_AI_ADVISORY_WARNING), id="ai-analysis-advisory", markup=False)
-            with Horizontal(id="ai-analysis-buttons"):
-                yield Button("Close", id="close-ai-analysis", variant="primary")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Close the dialog when its only button is pressed."""
-
-        if event.button.id == "close-ai-analysis":
-            self.dismiss()
-
-    def action_close(self) -> None:
-        """Close the dialog without performing any process action."""
-
-        self.dismiss()
-
-
 class ProcessDetailsScreen(ModalScreen[None]):
     """Show details and all connections for a selected process."""
 
@@ -462,13 +292,11 @@ class ProcessDetailsScreen(ModalScreen[None]):
     def __init__(
         self,
         process: ProcessSnapshot,
-        upload_history: tuple[float, ...],
-        download_history: tuple[float, ...],
+        activity_history: tuple[float, ...],
     ) -> None:
         super().__init__()
         self.process = process
-        self.upload_history = upload_history
-        self.download_history = download_history
+        self.activity_history = activity_history
 
     def compose(self) -> ComposeResult:
         """Build the details dialog."""
@@ -483,23 +311,15 @@ class ProcessDetailsScreen(ModalScreen[None]):
                 f"Connections: {self.process.connection_count} "
                 f"(Established: {self.process.established_connection_count}, "
                 f"Listening: {self.process.listening_connection_count})\n"
-                f"Est. Upload: {format_rate(self.process.estimated_upload_bytes_per_second)} | "
-                f"Est. Download: {format_rate(self.process.estimated_download_bytes_per_second)}"
+                f"Activity Score: {self.process.activity_score:.1f}"
             )
             yield Static(Text(info), id="process-details-info")
 
-            yield Static("Upload History", classes="metric-name")
+            yield Static("Activity History", classes="metric-name")
             yield Sparkline(
-                self.upload_history,
+                self.activity_history,
                 min_color="#4b8bd8",
                 max_color="#5eead4",
-                classes="metric-sparkline",
-            )
-            yield Static("Download History", classes="metric-name")
-            yield Sparkline(
-                self.download_history,
-                min_color="#4b8bd8",
-                max_color="#f9a8d4",
                 classes="metric-sparkline",
             )
 
@@ -648,7 +468,6 @@ class BeerNetworkApp(App[None]):
         classifier: ProcessClassifier | None = None,
         geoip_resolver: GeoIPLookup | None = None,
         process_controller: ProcessControl | None = None,
-        analyzer: AIAnalyzer | None = None,
         geoip_enabled: bool | None = None,
     ) -> None:
         if not math.isfinite(poll_interval) or poll_interval <= 0.0:
@@ -668,11 +487,7 @@ class BeerNetworkApp(App[None]):
         self.process_controller: ProcessControl = (
             process_controller if process_controller is not None else ProcessController()
         )
-        self.analyzer: AIAnalyzer = (
-            analyzer if analyzer is not None else AIAnalysisService.from_environment()
-        )
         self._owns_geoip_resolver = geoip_resolver is None
-        self._owns_analyzer = analyzer is None
         self._geoip_enabled = (
             _geoip_enabled_from_environment() if geoip_enabled is None else geoip_enabled
         )
@@ -698,8 +513,8 @@ class BeerNetworkApp(App[None]):
         self._geoip_lookup_running = False
         self._geoip_generation = 0
         self._history_size = history_size
-        self._process_upload_history: dict[int, deque[float]] = {}
-        self._process_download_history: dict[int, deque[float]] = {}
+        self._process_activity_history: dict[int, deque[float]] = {}
+        
         self._search_query: str = ""
 
     def compose(self) -> ComposeResult:
@@ -763,18 +578,10 @@ class BeerNetworkApp(App[None]):
 
         self._shutting_down = True
         self._geoip_generation += 1
-        analysis_workers = self.workers.cancel_group(self, "ai-analysis")
-        if analysis_workers:
-            await asyncio.gather(
-                *(worker.wait() for worker in analysis_workers),
-                return_exceptions=True,
-            )
         if self._owns_geoip_resolver:
             resolver = self.geoip_resolver
             if isinstance(resolver, GeoIPResolver):
                 await resolver.aclose()
-        if self._owns_analyzer:
-            await self.analyzer.aclose()
 
     def on_resize(self, event: events.Resize) -> None:
         """Use a compact table schema on narrow terminals."""
@@ -855,41 +662,6 @@ class BeerNetworkApp(App[None]):
             if self._latest_snapshot:
                 self._render_processes(self._latest_snapshot.processes)
 
-    def action_analyze_process(self) -> None:
-        """Analyze the selected immutable snapshot with the optional AI service."""
-
-        if self._analysis_running:
-            self.notify(
-                "An AI analysis is already in progress.",
-                title="AI Analysis",
-                severity="warning",
-            )
-            return
-        if not self.analyzer.available:
-            self.notify(
-                "AI analysis is unavailable. Configure a local provider or set GROQ_API_KEY.",
-                title="AI Analysis",
-                severity="warning",
-            )
-            return
-
-        process_snapshot = self._selected_process()
-        if process_snapshot is None:
-            self.notify(
-                "Select a process before requesting AI analysis.",
-                title="AI Analysis",
-                severity="warning",
-            )
-            return
-
-        self._analysis_running = True
-        self.run_worker(
-            self._perform_ai_analysis(process_snapshot),
-            name=f"ai-analysis-{process_snapshot.pid}",
-            group="ai-analysis",
-            exit_on_error=False,
-            exclusive=False,
-        )
 
     def action_show_details(self) -> None:
         """Show details for the selected process."""
@@ -902,9 +674,8 @@ class BeerNetworkApp(App[None]):
             )
             return
 
-        up_hist = tuple(self._process_upload_history.get(process_snapshot.pid, (0.0,)))
-        down_hist = tuple(self._process_download_history.get(process_snapshot.pid, (0.0,)))
-        self.push_screen(ProcessDetailsScreen(process_snapshot, up_hist, down_hist))
+        activity_hist = tuple(self._process_activity_history.get(process_snapshot.pid, (0.0,)))
+        self.push_screen(ProcessDetailsScreen(process_snapshot, activity_hist))
 
     def action_export_snapshot(self) -> None:
         if self._latest_snapshot is None:
@@ -979,36 +750,23 @@ class BeerNetworkApp(App[None]):
 
         current_pids = {p.pid for p in snapshot.processes}
         for p in snapshot.processes:
-            if p.pid not in self._process_upload_history:
-                self._process_upload_history[p.pid] = deque(
+            if p.pid not in self._process_activity_history:
+                self._process_activity_history[p.pid] = deque(
                     [0.0] * self._history_size, maxlen=self._history_size
                 )
-                self._process_download_history[p.pid] = deque(
-                    [0.0] * self._history_size, maxlen=self._history_size
-                )
-            self._process_upload_history[p.pid].append(
-                max(0.0, p.estimated_upload_bytes_per_second)
-            )
-            self._process_download_history[p.pid].append(
-                max(0.0, p.estimated_download_bytes_per_second)
-            )
+            self._process_activity_history[p.pid].append(p.activity_score)
 
-        for pid in list(self._process_upload_history.keys()):
+        for pid in list(self._process_activity_history.keys()):
             if pid not in current_pids:
-                del self._process_upload_history[pid]
-                del self._process_download_history[pid]
+                del self._process_activity_history[pid]
 
         self._render_processes(snapshot.processes)
         self._render_status(snapshot)
 
     def _get_peak_traffic(self, pid: int) -> float:
-        up_hist = self._process_upload_history.get(pid)
-        down_hist = self._process_download_history.get(pid)
-        recent_up = list(up_hist)[-5:] if up_hist else []
-        recent_down = list(down_hist)[-5:] if down_hist else []
-        peak_up = max(recent_up) if recent_up else 0.0
-        peak_down = max(recent_down) if recent_down else 0.0
-        return peak_up + peak_down
+        hist = self._process_activity_history.get(pid)
+        recent = list(hist)[-5:] if hist else []
+        return max(recent) if recent else 0.0
 
     def _render_processes(self, processes: tuple[ProcessSnapshot, ...]) -> None:
         if self._search_query:
@@ -1127,11 +885,7 @@ class BeerNetworkApp(App[None]):
     def _process_cells(self, process: ProcessSnapshot) -> tuple[object, ...]:
         compact = bool(self._compact_layout)
 
-        HIGH_TRAFFIC = 5 * 1024 * 1024
-        is_high_traffic = (
-            process.estimated_upload_bytes_per_second >= HIGH_TRAFFIC
-            or process.estimated_download_bytes_per_second >= HIGH_TRAFFIC
-        )
+        is_high_traffic = process.activity_score >= 10.0
 
         display_name = f"🚨 {process.name}" if is_high_traffic else process.name
         name = Text(
@@ -1154,31 +908,13 @@ class BeerNetworkApp(App[None]):
         else:
             status.stylize("dim white")
 
-        upload = format_rate(process.estimated_upload_bytes_per_second)
-        download = format_rate(process.estimated_download_bytes_per_second)
-
-        up_style = (
-            "bold red"
-            if process.estimated_upload_bytes_per_second >= HIGH_TRAFFIC
-            else "bold green"
-        )
-        down_style = (
-            "bold red"
-            if process.estimated_download_bytes_per_second >= HIGH_TRAFFIC
-            else "bold magenta"
-        )
-
-        speed = Text(overflow="ellipsis", no_wrap=True)
-        if compact:
-            speed.append("↑", style=up_style)
-            speed.append(f"{upload} ")
-            speed.append("↓", style=down_style)
-            speed.append(f"{download}")
+        speed = Text(f"{process.activity_score:.1f}", overflow="ellipsis", no_wrap=True)
+        if process.activity_score >= 10.0:
+            speed.stylize("bold red")
+        elif process.activity_score > 0:
+            speed.stylize("bold green")
         else:
-            speed.append("Up ", style="dim")
-            speed.append(f"{upload} ", style=up_style)
-            speed.append("/ Down ", style="dim")
-            speed.append(f"{download}", style=down_style)
+            speed.stylize("dim")
 
         remote_text = self._format_remote_endpoint(process)
         remote = Text(remote_text, overflow="ellipsis", no_wrap=True)
@@ -1346,27 +1082,6 @@ class BeerNetworkApp(App[None]):
         finally:
             self._process_action_running = False
 
-    async def _perform_ai_analysis(self, process: ProcessSnapshot) -> None:
-        """Run one isolated analysis and present a non-actionable result."""
-
-        try:
-            result = await self.analyzer.analyze(process)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            result = AIAnalysisResult(
-                success=False,
-                error=_AI_UNEXPECTED_ERROR,
-                provider=self.analyzer.provider,
-                model=self.analyzer.model,
-            )
-        finally:
-            self._analysis_running = False
-
-        if self._shutting_down or not self.is_running:
-            return
-        self.push_screen(AIAnalysisScreen(process, result))
-
     def _format_remote_endpoint(self, process: ProcessSnapshot) -> str:
         endpoints: list[tuple[str, int | None]] = []
         seen: set[tuple[str, int | None]] = set()
@@ -1509,8 +1224,8 @@ def _display_status(process: ProcessSnapshot) -> str:
 
 
 def _format_estimated_speed(process: ProcessSnapshot, *, compact: bool = False) -> str:
-    upload = format_rate(process.estimated_upload_bytes_per_second)
-    download = format_rate(process.estimated_download_bytes_per_second)
+    upload = format_rate(process.activity_score)
+    download = format_rate(process.activity_score)
     if compact:
         return f"↑{upload} ↓{download}"
     return f"Up {upload} / Down {download}"
@@ -1615,8 +1330,6 @@ def main() -> None:
 
 
 __all__ = [
-    "AIAnalysisScreen",
-    "AIAnalyzer",
     "BeerNetworkApp",
     "GeoIPLookup",
     "NetworkSampler",

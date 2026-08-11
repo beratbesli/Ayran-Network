@@ -25,8 +25,7 @@ def process(pid: int, name: str) -> ProcessSnapshot:
         connection_count=0,
         established_connection_count=0,
         listening_connection_count=0,
-        estimated_upload_bytes_per_second=0.0,
-        estimated_download_bytes_per_second=0.0,
+        activity_score=0.0,
         rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
         create_time=100.0 + pid,
     )
@@ -35,18 +34,17 @@ def process(pid: int, name: str) -> ProcessSnapshot:
 @pytest.mark.parametrize(
     "name",
     [
-        "beamng-drive.EXE",
-        "BEAMNG DRIVE X64.exe",
-        "BeamNG.drive.x86.exe",
-        "ELDEN_RING.EXE",
-        "Fortnite Client Win64 Shipping.exe",
-        "FORTNITECLIENT-WIN64-SHIPPING_EAC.EXE",
-        "FortniteLauncher.exe",
+        "CHROME.EXE",
+        "firefox.bin",
+        "apt",
+        "Discord.exe",
+        "slack",
+        "wget",
+        "CURL",
     ],
 )
-def test_default_focus_apps_recognize_game_process_variants(name: str) -> None:
+def test_default_focus_apps_recognize_browser_process_variants(name: str) -> None:
     classifier = FocusClassifier()
-
     assert classifier.matches(name)
 
 
@@ -59,18 +57,18 @@ def test_matching_ignores_case_punctuation_executable_suffix_and_path() -> None:
 
 
 def test_split_is_ordered_immutable_and_exposes_active_state() -> None:
-    browser = process(10, "browser")
-    first_game = process(20, "ELDEN-RING.exe")
-    second_game = process(30, "elden ring")
+    background_task = process(10, "unknown_task")
+    first_app = process(20, "chrome.exe")
+    second_app = process(30, "slack")
 
     selection = split_processes(
-        (browser, first_game, second_game),
+        (background_task, first_app, second_app),
         classifier=FocusClassifier(),
     )
 
-    assert selection.focused == (first_game, second_game)
-    assert selection.background == (browser,)
-    assert selection.matched_names == ("ELDEN-RING.exe",)
+    assert selection.focused == (first_app, second_app)
+    assert selection.background == (background_task,)
+    assert selection.matched_names == ("chrome.exe", "slack")
     assert selection.active is True
     assert selection.is_active is True
     with pytest.raises(FrozenInstanceError):
@@ -91,14 +89,14 @@ def test_environment_value_overrides_defaults() -> None:
 
     assert classifier.matches("custom-app.exe")
     assert classifier.matches("HELPER")
-    assert not classifier.matches("eldenring.exe")
+    assert not classifier.matches("chrome.exe")
 
 
 def test_environment_plus_prefix_extends_defaults_and_deduplicates() -> None:
     classifier = FocusClassifier.from_environment({FOCUS_APPS_ENV: "+ Custom.App, custom app.exe"})
 
     assert classifier.matches("Custom App.exe")
-    assert classifier.matches("BeamNG.drive.exe")
+    assert classifier.matches("chrome.exe")
     assert classifier.app_names[-1] == "Custom.App"
     assert sum(normalize_app_name(name) == "customapp" for name in classifier.app_names) == 1
 
@@ -106,5 +104,5 @@ def test_environment_plus_prefix_extends_defaults_and_deduplicates() -> None:
 def test_unset_and_empty_environment_values_have_distinct_meanings() -> None:
     assert parse_focus_apps(None) == DEFAULT_FOCUS_APPS
     assert parse_focus_apps("") == ()
-    assert FocusClassifier.from_environment({}).matches("Fortnite.exe")
-    assert not FocusClassifier.from_environment({FOCUS_APPS_ENV: ""}).matches("Fortnite.exe")
+    assert FocusClassifier.from_environment({}).matches("firefox.exe")
+    assert not FocusClassifier.from_environment({FOCUS_APPS_ENV: ""}).matches("firefox.exe")

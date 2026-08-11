@@ -11,8 +11,8 @@ from __future__ import annotations
 import asyncio
 import socket
 import time
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass, replace
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Final
 
 import psutil

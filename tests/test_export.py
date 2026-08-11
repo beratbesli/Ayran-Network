@@ -28,8 +28,7 @@ def test_export_json() -> None:
                 connection_count=0,
                 established_connection_count=0,
                 listening_connection_count=0,
-                estimated_upload_bytes_per_second=10.0,
-                estimated_download_bytes_per_second=20.0,
+                activity_score=10.0,
                 rate_estimate_basis="test",
                 limited_access=False,
             ),
@@ -70,8 +69,7 @@ def test_export_csv() -> None:
                 connection_count=0,
                 established_connection_count=0,
                 listening_connection_count=0,
-                estimated_upload_bytes_per_second=10.0,
-                estimated_download_bytes_per_second=20.0,
+                activity_score=10.0,
                 rate_estimate_basis="test",
                 limited_access=False,
             ),
@@ -84,7 +82,7 @@ def test_export_csv() -> None:
 
     assert (
         "timestamp,pid,name,username,status,connections,established,listening,"
-        "estimated_upload_bps,estimated_download_bps,global_upload_bps,"
+        "activity_score,global_upload_bps,"
         "global_download_bps,total_bytes_sent,total_bytes_received"
     ) in result
-    assert ("123,test_process,test_user,running,0,0,0,10.0,20.0,100.0,200.0,1000,2000") in result
+    assert ("123,test_process,test_user,running,0,0,0,10.0,100.0,200.0,1000,2000") in result

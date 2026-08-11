@@ -6,12 +6,10 @@ from typing import TypeAlias
 
 import pytest
 from textual.binding import Binding
-from textual.containers import Vertical, VerticalScroll
-from textual.widgets import Button, DataTable, Sparkline, Static
+from textual.containers import Vertical
+from textual.widgets import DataTable, Sparkline, Static
 
-from beer_network.ai_analysis import AIAnalysisResult, AIAnalysisService
 from beer_network.app import (
-    AIAnalysisScreen,
     BeerNetworkApp,
     ProcessActionConfirmScreen,
     format_bytes,
@@ -29,7 +27,6 @@ from beer_network.geoip import GeoIPResult
 from beer_network.process_control import ProcessAction, ProcessActionResult
 
 SampleResult: TypeAlias = NetworkSnapshot | Exception
-AnalysisOutcome: TypeAlias = AIAnalysisResult | Exception
 
 
 class FakeBackend:
@@ -136,61 +133,6 @@ class FakeProcessController:
         )
 
 
-class FakeAnalyzer:
-    def __init__(
-        self,
-        outcome: AnalysisOutcome | None = None,
-        *,
-        available: bool = True,
-        provider: str | None = "test-provider",
-        model: str | None = "test-model",
-        blocked: bool = False,
-    ) -> None:
-        self.outcome = outcome or AIAnalysisResult(
-            success=True,
-            analysis="Low risk, but verify independently.",
-            provider=provider,
-            model=model,
-        )
-        self._available = available
-        self._provider = provider
-        self._model = model
-        self.calls: list[ProcessSnapshot] = []
-        self.close_calls = 0
-        self.started = asyncio.Event()
-        self.release = asyncio.Event()
-        self.cancelled = asyncio.Event()
-        if not blocked:
-            self.release.set()
-
-    @property
-    def available(self) -> bool:
-        return self._available
-
-    @property
-    def provider(self) -> str | None:
-        return self._provider
-
-    @property
-    def model(self) -> str | None:
-        return self._model
-
-    async def analyze(self, process: ProcessSnapshot) -> AIAnalysisResult:
-        self.calls.append(process)
-        self.started.set()
-        try:
-            await self.release.wait()
-        except asyncio.CancelledError:
-            self.cancelled.set()
-            raise
-        if isinstance(self.outcome, Exception):
-            raise self.outcome
-        return self.outcome
-
-    async def aclose(self) -> None:
-        self.close_calls += 1
-
-
 def process(
     pid: int,
     *,
@@ -213,8 +155,7 @@ def process(
         connection_count=connections,
         established_connection_count=0,
         listening_connection_count=0,
-        estimated_upload_bytes_per_second=upload,
-        estimated_download_bytes_per_second=download,
+        activity_score=upload,
         rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
         create_time=create_time,
         limited_access=limited_access,
@@ -315,16 +256,16 @@ async def test_snapshot_updates_metrics_sparklines_and_process_table() -> None:
             "User",
             "Status",
             "Connections",
-            "Estimated Speed",
+            "Activity Score",
             "Remote Endpoint",
         ]
         row = table.get_row_at(0)
         assert row[0] == 42
-        assert str(row[1]) == "web-browser"
+        assert str(row[1]) == "🚨 web-browser"
         assert str(row[2]) == "alex"
         assert str(row[3]) == "running"
         assert str(row[4]) == "3"
-        assert str(row[5]) == "Up 4.0 KiB/s / Down 8.0 KiB/s"
+        assert str(row[5]) == "4096.0"
         assert str(row[6]) == "—"
         assert str(app.query_one("#status", Static).render()) == (
             "Monitoring 1 network-active process."
@@ -719,286 +660,3 @@ async def test_process_controller_failure_is_reported_as_error_notification() ->
         )
 
 
-@pytest.mark.asyncio
-async def test_ai_analysis_unavailable_is_inert_and_injected_analyzer_is_not_closed() -> None:
-    analyzer = FakeAnalyzer(available=False, provider=None, model=None)
-    app = BeerNetworkApp(
-        backend=FakeBackend(snapshot(process(31))),
-        analyzer=analyzer,
-        geoip_enabled=False,
-        poll_interval=3600.0,
-    )
-
-    async with app.run_test(size=(120, 28)) as pilot:
-        await finish_refresh(app)
-        await pilot.press("a")
-        await pilot.pause()
-
-        assert analyzer.calls == []
-        assert not isinstance(app.screen, AIAnalysisScreen)
-        assert any(
-            notification.message.startswith("AI analysis is unavailable.")
-            and notification.severity == "warning"
-            for notification in app._notifications
-        )
-
-    assert analyzer.close_calls == 0
-
-
-@pytest.mark.asyncio
-async def test_ai_analysis_requires_a_selected_process() -> None:
-    analyzer = FakeAnalyzer()
-    app = BeerNetworkApp(
-        backend=FakeBackend(snapshot()),
-        analyzer=analyzer,
-        geoip_enabled=False,
-        poll_interval=3600.0,
-    )
-
-    async with app.run_test(size=(120, 26)) as pilot:
-        await finish_refresh(app)
-        await pilot.press("a")
-        await pilot.pause()
-
-        assert analyzer.calls == []
-        assert any(
-            notification.message == "Select a process before requesting AI analysis."
-            and notification.severity == "warning"
-            for notification in app._notifications
-        )
-
-
-@pytest.mark.asyncio
-async def test_ai_analysis_success_uses_captured_snapshot_and_literal_bounded_text() -> None:
-    target = process(
-        44,
-        name="\x1b[31m[bold]Game[/bold]\x1b[0m\u202e\ud800",
-        create_time=456.0,
-    )
-    analysis = "\x1b[31m[red]Literal\x00assessment[/red]\x1b[0m\u202e\ud800\n" + ("x" * 5_000)
-    analyzer = FakeAnalyzer(
-        AIAnalysisResult(
-            success=True,
-            analysis=analysis,
-            provider="\x1b[31mlocal\x1b[0m\u202e\ud800",
-            model="safe\x85model\ud800",
-        )
-    )
-    controller = FakeProcessController()
-    app = BeerNetworkApp(
-        backend=FakeBackend(snapshot(target)),
-        analyzer=analyzer,
-        process_controller=controller,
-        geoip_enabled=False,
-        poll_interval=3600.0,
-    )
-
-    async with app.run_test(size=(120, 36)) as pilot:
-        await finish_refresh(app)
-        app.query_one("#process-table", DataTable).focus()
-        await pilot.press("a")
-        await finish_refresh(app)
-        await pilot.pause()
-
-        assert isinstance(app.screen, AIAnalysisScreen)
-        screen = app.screen
-        assert screen.process is target
-        assert analyzer.calls == [target]
-        assert controller.calls == []
-        assert str(screen.query_one("#ai-analysis-title", Static).render()) == (
-            "AI Analysis Complete"
-        )
-        assert str(screen.query_one("#ai-analysis-process", Static).render()) == (
-            "Process: [bold]Game[/bold] (PID 44)"
-        )
-        assert str(screen.query_one("#ai-analysis-provider", Static).render()) == (
-            "Provider: local | Model: safe model"
-        )
-        rendered_analysis = str(screen.query_one("#ai-analysis-message", Static).render())
-        assert rendered_analysis.startswith("[red]Literal assessment[/red]\n")
-        assert len(rendered_analysis) == 4_000
-        assert rendered_analysis.endswith("…")
-        assert "\x1b" not in rendered_analysis
-        assert "\u202e" not in rendered_analysis
-        assert "\ud800" not in rendered_analysis
-        assert "IP addresses, PID, and username are not sent." in str(
-            screen.query_one("#ai-analysis-privacy", Static).render()
-        )
-        assert "AI analysis never triggers process actions." in str(
-            screen.query_one("#ai-analysis-advisory", Static).render()
-        )
-
-        await pilot.press("escape")
-        await pilot.pause()
-        assert not isinstance(app.screen, AIAnalysisScreen)
-
-
-@pytest.mark.asyncio
-async def test_ai_analysis_failure_and_unexpected_errors_are_safe_literal_text() -> None:
-    target = process(52, name="browser")
-    provider_failure = FakeAnalyzer(
-        AIAnalysisResult(
-            success=False,
-            error="[red]Provider unavailable[/red]",
-            provider="groq",
-            model="remote-model",
-        )
-    )
-    app = BeerNetworkApp(
-        backend=FakeBackend(snapshot(target)),
-        analyzer=provider_failure,
-        geoip_enabled=False,
-        poll_interval=3600.0,
-    )
-
-    async with app.run_test(size=(120, 32)) as pilot:
-        await finish_refresh(app)
-        await pilot.press("a")
-        await finish_refresh(app)
-        await pilot.pause()
-
-        assert isinstance(app.screen, AIAnalysisScreen)
-        assert str(app.screen.query_one("#ai-analysis-title", Static).render()) == (
-            "AI Analysis Failed"
-        )
-        assert str(app.screen.query_one("#ai-analysis-message", Static).render()) == (
-            "[red]Provider unavailable[/red]"
-        )
-
-    unexpected = FakeAnalyzer(RuntimeError("private provider detail"))
-    app = BeerNetworkApp(
-        backend=FakeBackend(snapshot(target)),
-        analyzer=unexpected,
-        geoip_enabled=False,
-        poll_interval=3600.0,
-    )
-
-    async with app.run_test(size=(120, 32)) as pilot:
-        await finish_refresh(app)
-        await pilot.press("a")
-        await finish_refresh(app)
-        await pilot.pause()
-
-        message = str(app.screen.query_one("#ai-analysis-message", Static).render())
-        assert message == "AI analysis failed unexpectedly. Please try again."
-        assert "private provider detail" not in message
-
-
-@pytest.mark.asyncio
-async def test_ai_running_guard_does_not_block_refresh_and_keeps_original_selection() -> None:
-    original = process(61, name="original", create_time=100.0)
-    refreshed = process(62, name="refreshed", create_time=200.0)
-    analyzer = FakeAnalyzer(blocked=True)
-    backend = FakeBackend(snapshot(original), snapshot(refreshed, upload=8_192.0))
-    app = BeerNetworkApp(
-        backend=backend,
-        analyzer=analyzer,
-        geoip_enabled=False,
-        poll_interval=3600.0,
-    )
-
-    async with app.run_test(size=(120, 30)) as pilot:
-        await finish_refresh(app)
-        await pilot.press("a")
-        await asyncio.wait_for(analyzer.started.wait(), timeout=1.0)
-
-        await pilot.press("a")
-        await pilot.press("r")
-        await pilot.pause()
-
-        assert analyzer.calls == [original]
-        assert backend.calls == 2
-        assert str(app.query_one("#upload-rate", Static).render()) == "8.0 KiB/s"
-        assert any(
-            notification.message == "An AI analysis is already in progress."
-            for notification in app._notifications
-        )
-
-        analyzer.release.set()
-        await finish_refresh(app)
-        await pilot.pause()
-
-        assert isinstance(app.screen, AIAnalysisScreen)
-        assert app.screen.process is original
-
-
-@pytest.mark.asyncio
-async def test_default_analyzer_is_closed_by_app_lifecycle(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    analyzer = FakeAnalyzer(available=False)
-    monkeypatch.setattr(AIAnalysisService, "from_environment", lambda: analyzer)
-    app = BeerNetworkApp(
-        backend=FakeBackend(snapshot()),
-        geoip_enabled=False,
-        poll_interval=3600.0,
-    )
-
-    async with app.run_test(size=(100, 24)):
-        await finish_refresh(app)
-        assert analyzer.close_calls == 0
-
-    assert analyzer.close_calls == 1
-
-
-@pytest.mark.asyncio
-async def test_ai_modal_scrolls_all_content_inside_a_short_terminal() -> None:
-    analyzer = FakeAnalyzer(
-        AIAnalysisResult(
-            success=True,
-            analysis="Assessment\n" + ("detail " * 400),
-            provider="local",
-            model="compact-model",
-        )
-    )
-    app = BeerNetworkApp(
-        backend=FakeBackend(snapshot(process(70, name="compact-app"))),
-        analyzer=analyzer,
-        geoip_enabled=False,
-        poll_interval=3600.0,
-    )
-
-    async with app.run_test(size=(60, 24)) as pilot:
-        await finish_refresh(app)
-        await pilot.press("a")
-        await finish_refresh(app)
-        await pilot.pause()
-
-        dialog = app.screen.query_one("#ai-analysis-dialog", VerticalScroll)
-        close_button = app.screen.query_one("#close-ai-analysis", Button)
-        assert dialog.region.y >= 0
-        assert dialog.region.bottom <= app.screen.size.height
-
-        close_button.scroll_visible(animate=False, immediate=True, force=True)
-        await pilot.pause()
-        assert close_button.region.y >= dialog.content_region.y
-        assert close_button.region.bottom <= dialog.content_region.bottom
-
-        close_button.press()
-        await pilot.pause()
-        assert not isinstance(app.screen, AIAnalysisScreen)
-
-
-@pytest.mark.asyncio
-async def test_unmount_cancels_running_ai_worker_and_ignores_its_late_result() -> None:
-    analyzer = FakeAnalyzer(blocked=True)
-    app = BeerNetworkApp(
-        backend=FakeBackend(snapshot(process(71))),
-        analyzer=analyzer,
-        geoip_resolver=FakeGeoIPResolver(),
-        geoip_enabled=False,
-        poll_interval=3600.0,
-    )
-
-    async with app.run_test(size=(100, 26)) as pilot:
-        await finish_refresh(app)
-        await pilot.press("a")
-        await asyncio.wait_for(analyzer.started.wait(), timeout=1.0)
-
-        await app.on_unmount()
-        await pilot.pause()
-
-        assert analyzer.cancelled.is_set()
-        assert analyzer.close_calls == 0
-        assert not app._analysis_running
-        assert not isinstance(app.screen, AIAnalysisScreen)
