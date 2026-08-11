@@ -25,16 +25,23 @@ FOCUS_APPS_ENV: Final = "BEER_NETWORK_FOCUS_APPS"
 # Each entry is a process name used by a supported game. Name normalization
 # handles executable suffixes, capitalization, and punctuation differences.
 DEFAULT_FOCUS_APPS: Final[tuple[str, ...]] = (
-    "BeamNG.drive",
-    "BeamNG.drive.x64.exe",
-    "BeamNG.drive.x86.exe",
-    "Elden Ring",
-    "eldenring.exe",
-    "Fortnite",
-    "FortniteClient-Win64-Shipping.exe",
-    "FortniteClient-Win64-Shipping_BE.exe",
-    "FortniteClient-Win64-Shipping_EAC.exe",
-    "FortniteLauncher.exe",
+    "chrome",
+    "chromium",
+    "firefox",
+    "msedge",
+    "opera",
+    "vivaldi",
+    "brave",
+    "apt",
+    "dpkg",
+    "dnf",
+    "pacman",
+    "yum",
+    "wget",
+    "curl",
+    "discord",
+    "slack",
+    "zoom",
 )
 
 _APP_SEPARATOR = re.compile(r"[,;\n]+")

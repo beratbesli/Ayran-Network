@@ -22,7 +22,6 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Sparkline, Static
 
-from beer_network.ai_analysis import AIAnalysisResult, AIAnalysisService
 from beer_network.backend import NetworkSnapshot, ProcessSnapshot, PsutilNetworkBackend
 from beer_network.export import export_csv, export_json
 from beer_network.focus import FocusClassifier, FocusSelection

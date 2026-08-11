@@ -43,12 +43,7 @@ class BeerNetworkConfig:
     # Interface filter
     interface_filter: str = ""
 
-    # AI Analysis
-    groq_api_key: str = ""
-    groq_model: str = ""
-    llm_base_url: str = ""
-    llm_model: str = ""
-    llm_api_key: str = ""
+
 
     # Export
     export_dir: str = ""
@@ -108,7 +103,6 @@ def _parse_config(
     focus = data.get("focus", {})
     geoip = data.get("geoip", {})
     interface = data.get("interface", {})
-    ai = data.get("ai", {})
     export = data.get("export", {})
 
     focus_apps_raw = focus.get("apps", [])
@@ -126,11 +120,6 @@ def _parse_config(
         focus_extend_defaults=_bool_value(focus, "extend_defaults", True),
         geoip_enabled=_bool_value(geoip, "enabled", True),
         interface_filter=_str_value(interface, "filter", ""),
-        groq_api_key=_str_value(ai, "groq_api_key", ""),
-        groq_model=_str_value(ai, "groq_model", ""),
-        llm_base_url=_str_value(ai, "llm_base_url", ""),
-        llm_model=_str_value(ai, "llm_model", ""),
-        llm_api_key=_str_value(ai, "llm_api_key", ""),
         export_dir=_str_value(export, "directory", ""),
         source_path=source_path,
     )

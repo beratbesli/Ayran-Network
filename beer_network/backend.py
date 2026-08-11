@@ -69,8 +69,7 @@ class ProcessSnapshot:
     connection_count: int
     established_connection_count: int
     listening_connection_count: int
-    estimated_upload_bytes_per_second: float
-    estimated_download_bytes_per_second: float
+    activity_score: float
     rate_estimate_basis: str
     create_time: float | None = None
     limited_access: bool = False
@@ -82,17 +81,7 @@ class ProcessSnapshot:
 
         return self.username
 
-    @property
-    def estimated_upload_bps(self) -> float:
-        """Return the estimated upload rate using a compact name."""
 
-        return self.estimated_upload_bytes_per_second
-
-    @property
-    def estimated_download_bps(self) -> float:
-        """Return the estimated download rate using a compact name."""
-
-        return self.estimated_download_bytes_per_second
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,7 +137,7 @@ class PsutilNetworkBackend:
         unrated_processes, warnings = self._collect_processes()
         if counter_warning is not None:
             warnings.insert(0, counter_warning)
-        processes = self._apply_rate_estimates(unrated_processes, global_rates)
+        processes = tuple(unrated.snapshot for unrated in unrated_processes)
         return NetworkSnapshot(
             sampled_at=sampled_at,
             global_rates=global_rates,
@@ -272,8 +261,7 @@ class PsutilNetworkBackend:
                     connection_count=0,
                     established_connection_count=0,
                     listening_connection_count=0,
-                    estimated_upload_bytes_per_second=0.0,
-                    estimated_download_bytes_per_second=0.0,
+                    activity_score=0.0,
                     rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
                     limited_access=True,
                     warning=warning,
@@ -305,36 +293,14 @@ class PsutilNetworkBackend:
                 connection_count=len(connections),
                 established_connection_count=established_count,
                 listening_connection_count=listening_count,
-                estimated_upload_bytes_per_second=0.0,
-                estimated_download_bytes_per_second=0.0,
+                activity_score=activity_score,
                 rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
                 create_time=create_time,
             ),
             activity_score=activity_score,
         )
 
-    @staticmethod
-    def _apply_rate_estimates(
-        unrated_processes: Iterable[_UnratedProcess],
-        global_rates: GlobalRates,
-    ) -> tuple[ProcessSnapshot, ...]:
-        unrated = tuple(unrated_processes)
-        total_score = sum(process.activity_score for process in unrated)
-        if total_score <= 0.0:
-            return tuple(process.snapshot for process in unrated)
 
-        return tuple(
-            replace(
-                process.snapshot,
-                estimated_upload_bytes_per_second=(
-                    global_rates.upload_bytes_per_second * process.activity_score / total_score
-                ),
-                estimated_download_bytes_per_second=(
-                    global_rates.download_bytes_per_second * process.activity_score / total_score
-                ),
-            )
-            for process in unrated
-        )
 
 
 def _limited_process(*, pid: int, warning: str) -> _UnratedProcess:
@@ -348,8 +314,7 @@ def _limited_process(*, pid: int, warning: str) -> _UnratedProcess:
             connection_count=0,
             established_connection_count=0,
             listening_connection_count=0,
-            estimated_upload_bytes_per_second=0.0,
-            estimated_download_bytes_per_second=0.0,
+            activity_score=0.0,
             rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
             limited_access=True,
             warning=warning,
