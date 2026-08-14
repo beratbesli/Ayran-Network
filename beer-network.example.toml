@@ -1,33 +1,32 @@
 # Beer-Network Configuration File
-# Copy to ~/.config/beer-network/config.toml
+# Copy to ~/.config/beer-network/config.toml or ~/.beer-network/config.toml
 
 [general]
+# Polling interval in seconds (default: 1.0)
 poll_interval = 1.0
+
+# Number of historical points to store for rate history and sparklines (default: 60)
 history_size = 60
 
 [focus]
-# Comma-separated or list of app names to focus on
-apps = ["BeamNG.drive", "Elden Ring", "Fortnite"]
-# Set to false to replace defaults instead of extending
+# Applications to highlight in the Focused Applications section
+apps = ["BeamNG.drive", "Elden Ring", "Fortnite", "steam", "discord", "firefox", "chrome"]
+
+# Set to false to replace default app list instead of extending it (default: true)
 extend_defaults = true
 
 [geoip]
+# Enable remote IP country lookup & flags (default: true)
 enabled = true
 
 [interface]
-# Filter mode: 'no-virtual', 'exclude:pattern1,pattern2', or 'include:pattern1,pattern2'
+# Interface filtering:
+#   ""                         - Monitor all active network interfaces
+#   "no-virtual"               - Exclude docker, veth, lo, tun, tap, virbr, etc.
+#   "exclude:docker,veth,virbr"- Exclude matching interface names (comma-separated regex)
+#   "include:eth0,wlan0"       - Include only matching interface names
 filter = ""
 
-[ai]
-# Groq provider
-# groq_api_key = "your-key"
-# groq_model = "llama-3.3-70b-versatile"
-
-# Local OpenAI-compatible provider  
-# llm_base_url = "http://127.0.0.1:11434/v1"
-# llm_model = "your-local-model"
-# llm_api_key = ""
-
 [export]
-# Export directory (default: ~/.beer-network/exports)
+# Export snapshots output directory (default: ~/.beer-network/exports)
 # directory = "~/.beer-network/exports"
