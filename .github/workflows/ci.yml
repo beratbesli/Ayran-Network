@@ -31,7 +31,7 @@ jobs:
         run: ruff check .
 
       - name: Run mypy
-        run: mypy beer_network tests
+        run: mypy ayran_network tests
 
       - name: Run pytest
         run: pytest

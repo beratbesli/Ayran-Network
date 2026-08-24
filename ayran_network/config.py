@@ -1,4 +1,4 @@
-"""Configuration file support for Beer-Network."""
+"""Configuration file support for Ayran-Network."""
 
 from __future__ import annotations
 
@@ -14,19 +14,19 @@ else:
     import tomli as tomllib
 
 
-__all__ = ["BeerNetworkConfig", "load_config"]
+__all__ = ["AyranNetworkConfig", "load_config"]
 
 _CONFIG_PATHS: Final[tuple[Path, ...]] = (
-    Path.home() / ".config" / "beer-network" / "config.toml",
-    Path.home() / ".beer-network" / "config.toml",
-    Path("beer-network.toml"),
+    Path.home() / ".config" / "ayran-network" / "config.toml",
+    Path.home() / ".ayran-network" / "config.toml",
+    Path("ayran-network.toml"),
 )
 
-_CONFIG_PATH_ENV: Final = "BEER_NETWORK_CONFIG"
+_CONFIG_PATH_ENV: Final = "AYRAN_NETWORK_CONFIG"
 
 
 @dataclass(frozen=True, slots=True)
-class BeerNetworkConfig:
+class AyranNetworkConfig:
     """Parsed application configuration."""
 
     # General
@@ -54,24 +54,24 @@ class BeerNetworkConfig:
 
 def load_config(
     config_path: str | Path | None = None,
-) -> BeerNetworkConfig:
+) -> AyranNetworkConfig:
     """Load configuration from a TOML file.
 
     Search order:
     1. Explicit config_path argument
-    2. BEER_NETWORK_CONFIG environment variable
-    3. Default paths: ~/.config/beer-network/config.toml,
-       ~/.beer-network/config.toml, ./beer-network.toml
+    2. AYRAN_NETWORK_CONFIG environment variable
+    3. Default paths: ~/.config/ayran-network/config.toml,
+       ~/.ayran-network/config.toml, ./ayran-network.toml
     """
     path = _find_config_file(config_path)
     if path is None or tomllib is None:
-        return BeerNetworkConfig()
+        return AyranNetworkConfig()
 
     try:
         with open(path, "rb") as f:
             data = tomllib.load(f)
     except (OSError, getattr(tomllib, "TOMLDecodeError", Exception)):
-        return BeerNetworkConfig(source_path=str(path))
+        return AyranNetworkConfig(source_path=str(path))
 
     return _parse_config(data, source_path=str(path))
 
@@ -98,7 +98,7 @@ def _find_config_file(
 def _parse_config(
     data: dict[str, Any],
     source_path: str | None = None,
-) -> BeerNetworkConfig:
+) -> AyranNetworkConfig:
     general = data.get("general", {})
     focus = data.get("focus", {})
     geoip = data.get("geoip", {})
@@ -113,7 +113,7 @@ def _parse_config(
     else:
         focus_apps = ()
 
-    return BeerNetworkConfig(
+    return AyranNetworkConfig(
         poll_interval=_float_value(general, "poll_interval", 1.0),
         history_size=_int_value(general, "history_size", 60),
         focus_apps=focus_apps,

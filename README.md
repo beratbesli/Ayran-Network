@@ -1,8 +1,8 @@
-# 🍺 Beer-Network
+# 🥛 Ayran-Network
 
 <div align="center">
 
-[![CI](https://github.com/beratbesli/Beer-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/beratbesli/Beer-Network/actions/workflows/ci.yml)
+[![CI](https://github.com/beratbesli/Ayran-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/beratbesli/Ayran-Network/actions/workflows/ci.yml)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![UI: Textual](https://img.shields.io/badge/TUI-Textual-00d2ff.svg)](https://textual.textualize.io/)
@@ -22,10 +22,10 @@
 
 ## ⚡ Overview
 
-**Beer-Network** brings an intuitive, asynchronous Terminal User Interface (TUI) to your shell for monitoring live network metrics on Linux. Built with **Python 3.10+**, **Textual**, **psutil**, and **asyncio**, it delivers responsive, low-overhead network diagnostics right inside your terminal.
+**Ayran-Network** brings an intuitive, asynchronous Terminal User Interface (TUI) to your shell for monitoring live network metrics on Linux. Built with **Python 3.10+**, **Textual**, **psutil**, and **asyncio**, it delivers responsive, low-overhead network diagnostics right inside your terminal.
 
 ```text
-┌─ Beer-Network ────────────────────────────────────────────────────────┐
+┌─ Ayran-Network ────────────────────────────────────────────────────────┐
 │  ▼ Download: 14.2 MB/s  [ ▂▃▅▆▇█]   ▲ Upload: 1.8 MB/s   [   ▂▃▅]     │
 ├───────────────────────────────────────────────────────────────────────┤
 │  Focused Applications                                                 │
@@ -50,7 +50,7 @@
 - 🔍 **Live Search & Filter**: Instant dynamic filtering across process names and PIDs by pressing <kbd>F</kbd>.
 - 🛡️ **Guarded Process Management**: Safely Suspend (<kbd>S</kbd>), Resume (<kbd>U</kbd>), or Terminate (<kbd>K</kbd>) misbehaving network consumers directly from the TUI with built-in confirmation dialogs.
 - 🔬 **Deep Process Inspection Modal**: Press <kbd>D</kbd> to inspect complete socket connection trees, local/remote IP endpoints, port numbers, connection states (`ESTABLISHED`, `LISTEN`, `TIME_WAIT`), and traffic score histories.
-- 📁 **Snapshot Data Export**: One-touch export (<kbd>E</kbd>) of complete system network state snapshots to structured **JSON Lines** and **CSV** files (`~/.beer-network/exports/`).
+- 📁 **Snapshot Data Export**: One-touch export (<kbd>E</kbd>) of complete system network state snapshots to structured **JSON Lines** and **CSV** files (`~/.ayran-network/exports/`).
 - 🎛️ **Interface Filtering**: Support for excluding virtual bridges, container interfaces (`docker`, `veth`, `virbr`), and loopback devices.
 - ⚡ **Asynchronous & Non-Blocking**: High-frequency sampling runs on a dedicated background loop ensuring butter-smooth UI responsiveness without terminal stutter.
 
@@ -67,8 +67,8 @@
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/beratbesli/Beer-Network.git
-cd Beer-Network
+git clone https://github.com/beratbesli/Ayran-Network.git
+cd Ayran-Network
 
 # 2. Create and activate virtual environment
 python3 -m venv .venv
@@ -78,16 +78,16 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-### Running Beer-Network
+### Running Ayran-Network
 
 Run directly as a module or through the console entry point:
 
 ```bash
 # Run with console command
-beer-network
+ayran-network
 
 # Or run via Python module
-python3 -m beer_network
+python3 -m ayran_network
 ```
 
 ---
@@ -105,25 +105,25 @@ python3 -m beer_network
 | <kbd>U</kbd> | **Resume** | Unfreeze selected process |
 | <kbd>E</kbd> | **Export** | Save current network snapshot to CSV and JSONL |
 | <kbd>R</kbd> | **Refresh** | Request immediate data sample refresh |
-| <kbd>Q</kbd> | **Quit** | Exit Beer-Network |
+| <kbd>Q</kbd> | **Quit** | Exit Ayran-Network |
 
 ---
 
 ## ⚙️ Configuration
 
-Beer-Network supports configuration via TOML files and environment variables.
+Ayran-Network supports configuration via TOML files and environment variables.
 
 ### Configuration Files
 
-Beer-Network checks configuration candidates in the following order:
-1. File specified by `BEER_NETWORK_CONFIG` environment variable
-2. `~/.config/beer-network/config.toml`
-3. `~/.beer-network/config.toml`
-4. `./beer-network.toml`
+Ayran-Network checks configuration candidates in the following order:
+1. File specified by `AYRAN_NETWORK_CONFIG` environment variable
+2. `~/.config/ayran-network/config.toml`
+3. `~/.ayran-network/config.toml`
+4. `./ayran-network.toml`
 
 ### Example `config.toml`
 
-Copy `beer-network.example.toml` to `~/.config/beer-network/config.toml`:
+Copy `ayran-network.example.toml` to `~/.config/ayran-network/config.toml`:
 
 ```toml
 [general]
@@ -142,18 +142,18 @@ enabled = true          # Enable remote IP country lookup & flags
 filter = "no-virtual"   # Options: "no-virtual", "exclude:docker,veth", "include:eth0"
 
 [export]
-directory = "~/.beer-network/exports"
+directory = "~/.ayran-network/exports"
 ```
 
 ### Environment Variables
 
 | Variable | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `BEER_NETWORK_CONFIG` | `string` | `""` | Explicit path to TOML configuration file |
-| `BEER_NETWORK_GEOIP_ENABLED` | `bool` | `true` | Toggle Geo-IP enrichment (`1`/`0`, `true`/`false`) |
-| `BEER_NETWORK_FOCUS_APPS` | `string` | `""` | Comma-separated app names (prefix with `+` to extend) |
-| `BEER_NETWORK_INTERFACE_FILTER` | `string` | `""` | Filter mode (`no-virtual`, `exclude:...`, `include:...`) |
-| `BEER_NETWORK_EXPORT_DIR` | `string` | `~/.beer-network/exports` | Output directory for snapshot exports |
+| `AYRAN_NETWORK_CONFIG` | `string` | `""` | Explicit path to TOML configuration file |
+| `AYRAN_NETWORK_GEOIP_ENABLED` | `bool` | `true` | Toggle Geo-IP enrichment (`1`/`0`, `true`/`false`) |
+| `AYRAN_NETWORK_FOCUS_APPS` | `string` | `""` | Comma-separated app names (prefix with `+` to extend) |
+| `AYRAN_NETWORK_INTERFACE_FILTER` | `string` | `""` | Filter mode (`no-virtual`, `exclude:...`, `include:...`) |
+| `AYRAN_NETWORK_EXPORT_DIR` | `string` | `~/.ayran-network/exports` | Output directory for snapshot exports |
 
 ---
 
@@ -164,7 +164,7 @@ Under Linux security models, standard unprivileged users can only inspect networ
 To observe system-wide sockets from all system processes:
 ```bash
 # Option A: Run with sudo
-sudo beer-network
+sudo ayran-network
 
 # Option B: Or set cap_net_admin / cap_sys_ptrace on your python binary if preferred
 ```
@@ -189,7 +189,7 @@ pytest
 ruff check .
 
 # Run strict static type analysis
-mypy beer_network tests
+mypy ayran_network tests
 ```
 
 ---

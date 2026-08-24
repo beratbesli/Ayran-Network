@@ -1,4 +1,4 @@
-"""Network interface filtering for Beer-Network."""
+"""Network interface filtering for Ayran-Network."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Final, TypeVar
 
 __all__ = ["INTERFACE_FILTER_ENV", "InterfaceFilter"]
 
-INTERFACE_FILTER_ENV: Final = "BEER_NETWORK_INTERFACE_FILTER"
+INTERFACE_FILTER_ENV: Final = "AYRAN_NETWORK_INTERFACE_FILTER"
 
 T = TypeVar("T")
 
@@ -46,7 +46,7 @@ class InterfaceFilter:
         cls,
         environ: Mapping[str, str] | None = None,
     ) -> InterfaceFilter:
-        """Build an interface filter from BEER_NETWORK_INTERFACE_FILTER.
+        """Build an interface filter from AYRAN_NETWORK_INTERFACE_FILTER.
 
         Format: 'exclude:pattern1,pattern2' or 'include:pattern1,pattern2'
         Default (unset): no filtering (all interfaces included)

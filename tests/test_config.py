@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from beer_network.config import _CONFIG_PATH_ENV, load_config
+from ayran_network.config import _CONFIG_PATH_ENV, load_config
 
 
 def test_default_config() -> None:

@@ -2,8 +2,8 @@
 
 import json
 
-from beer_network.backend import GlobalRates, NetworkSnapshot, ProcessSnapshot
-from beer_network.export import export_csv, export_json
+from ayran_network.backend import GlobalRates, NetworkSnapshot, ProcessSnapshot
+from ayran_network.export import export_csv, export_json
 
 
 def test_export_json() -> None:

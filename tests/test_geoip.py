@@ -6,7 +6,7 @@ from dataclasses import FrozenInstanceError
 import httpx
 import pytest
 
-from beer_network.geoip import GeoIPResolver, GeoIPResult
+from ayran_network.geoip import GeoIPResolver, GeoIPResult
 
 
 class MutableClock:

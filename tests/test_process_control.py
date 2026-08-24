@@ -9,8 +9,8 @@ from typing import Any
 import psutil
 import pytest
 
-from beer_network import process_control
-from beer_network.process_control import (
+from ayran_network import process_control
+from ayran_network.process_control import (
     ProcessActionResult,
     ProcessController,
     resume_process,

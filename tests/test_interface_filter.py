@@ -1,4 +1,4 @@
-from beer_network.interface_filter import INTERFACE_FILTER_ENV, InterfaceFilter
+from ayran_network.interface_filter import INTERFACE_FILTER_ENV, InterfaceFilter
 
 
 def test_default_filter_includes_everything() -> None:

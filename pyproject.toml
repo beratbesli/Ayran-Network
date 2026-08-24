@@ -3,13 +3,13 @@ requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "beer-network"
+name = "ayran-network"
 version = "0.1.0"
 description = "A responsive terminal dashboard for real-time Linux network traffic monitoring."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Beer-Network contributors" }]
+authors = [{ name = "Ayran-Network contributors" }]
 dependencies = [
     "httpx>=0.27.0",
     "psutil>=5.9.8",
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-beer-network = "beer_network.app:main"
+ayran-network = "ayran_network.app:main"
 
 [project.optional-dependencies]
 dev = [
@@ -30,7 +30,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["beer_network"]
+packages = ["ayran_network"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"

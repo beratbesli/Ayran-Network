@@ -1,4 +1,4 @@
-"""Textual application for the Beer-Network traffic dashboard."""
+"""Textual application for the Ayran-Network traffic dashboard."""
 
 from __future__ import annotations
 
@@ -22,11 +22,11 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Sparkline, Static
 
-from beer_network.backend import NetworkSnapshot, ProcessSnapshot, PsutilNetworkBackend
-from beer_network.export import export_csv, export_json
-from beer_network.focus import FocusClassifier, FocusSelection
-from beer_network.geoip import GeoIPResolver, GeoIPResult
-from beer_network.process_control import ProcessAction, ProcessActionResult, ProcessController
+from ayran_network.backend import NetworkSnapshot, ProcessSnapshot, PsutilNetworkBackend
+from ayran_network.export import export_csv, export_json
+from ayran_network.focus import FocusClassifier, FocusSelection
+from ayran_network.geoip import GeoIPResolver, GeoIPResult
+from ayran_network.process_control import ProcessAction, ProcessActionResult, ProcessController
 
 DEFAULT_POLL_INTERVAL = 1.0
 DEFAULT_HISTORY_SIZE = 60
@@ -92,7 +92,7 @@ _COMPACT_COLUMNS: Final[tuple[tuple[str, str, int], ...]] = (
 
 
 class NetworkSampler(Protocol):
-    """The backend interface required by :class:`BeerNetworkApp`."""
+    """The backend interface required by :class:`AyranNetworkApp`."""
 
     async def sample(self) -> NetworkSnapshot:
         """Return the next network snapshot."""
@@ -373,10 +373,10 @@ class ProcessTable(DataTable[object]):
                 if fg.row_count:
                     fg.move_cursor(row=fg.row_count - 1, animate=False)
 
-class BeerNetworkApp(App[None]):
+class AyranNetworkApp(App[None]):
     """A live terminal dashboard for global and per-process network activity."""
 
-    TITLE = "Beer-Network"
+    TITLE = "Ayran-Network"
     SUB_TITLE = "Live network traffic"
 
     BINDINGS = [
@@ -721,7 +721,7 @@ class BeerNetworkApp(App[None]):
         from pathlib import Path
 
         try:
-            export_dir = Path.home() / ".beer-network" / "exports"
+            export_dir = Path.home() / ".ayran-network" / "exports"
             export_dir.mkdir(parents=True, exist_ok=True)
             timestamp = datetime.fromtimestamp(snapshot.sampled_at, tz=timezone.utc).strftime(
                 "%Y%m%d_%H%M%S"
@@ -1288,7 +1288,7 @@ def _is_public_ip(host: str) -> bool:
 
 
 def _geoip_enabled_from_environment() -> bool:
-    raw_value = os.environ.get("BEER_NETWORK_GEOIP_ENABLED")
+    raw_value = os.environ.get("AYRAN_NETWORK_GEOIP_ENABLED")
     return raw_value is None or raw_value.strip().casefold() not in _FALSE_LIKE_VALUES
 
 
@@ -1359,13 +1359,13 @@ def _format_quantity(value: float) -> str:
 
 
 def main() -> None:
-    """Run the Beer-Network terminal application."""
+    """Run the Ayran-Network terminal application."""
 
-    BeerNetworkApp().run()
+    AyranNetworkApp().run()
 
 
 __all__ = [
-    "BeerNetworkApp",
+    "AyranNetworkApp",
     "GeoIPLookup",
     "NetworkSampler",
     "ProcessActionConfirmScreen",

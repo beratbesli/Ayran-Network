@@ -4,8 +4,8 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from beer_network.backend import PROCESS_RATE_ESTIMATE_BASIS, ProcessSnapshot
-from beer_network.focus import (
+from ayran_network.backend import PROCESS_RATE_ESTIMATE_BASIS, ProcessSnapshot
+from ayran_network.focus import (
     DEFAULT_FOCUS_APPS,
     FOCUS_APPS_ENV,
     FocusClassifier,

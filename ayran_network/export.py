@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timezone
 from typing import Final
 
-from beer_network.backend import NetworkSnapshot, ProcessSnapshot
+from ayran_network.backend import NetworkSnapshot, ProcessSnapshot
 
 __all__ = ["export_json", "export_csv"]
 

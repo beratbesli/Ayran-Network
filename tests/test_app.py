@@ -9,23 +9,23 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import Sparkline, Static
 
-from beer_network.app import (
-    BeerNetworkApp,
+from ayran_network.app import (
+    AyranNetworkApp,
     ProcessActionConfirmScreen,
     ProcessTable,
     format_bytes,
     format_rate,
 )
-from beer_network.backend import (
+from ayran_network.backend import (
     PROCESS_RATE_ESTIMATE_BASIS,
     GlobalRates,
     NetworkSnapshot,
     ProcessConnection,
     ProcessSnapshot,
 )
-from beer_network.focus import FocusClassifier
-from beer_network.geoip import GeoIPResult
-from beer_network.process_control import ProcessAction, ProcessActionResult
+from ayran_network.focus import FocusClassifier
+from ayran_network.geoip import GeoIPResult
+from ayran_network.process_control import ProcessAction, ProcessActionResult
 
 SampleResult: TypeAlias = NetworkSnapshot | Exception
 
@@ -199,7 +199,7 @@ def snapshot(
     )
 
 
-async def finish_refresh(app: BeerNetworkApp) -> None:
+async def finish_refresh(app: AyranNetworkApp) -> None:
     await app.workers.wait_for_complete()
 
 
@@ -229,7 +229,7 @@ async def test_snapshot_updates_metrics_sparklines_and_process_table() -> None:
             )
         )
     )
-    app = BeerNetworkApp(backend=backend, poll_interval=3600.0, history_size=4)
+    app = AyranNetworkApp(backend=backend, poll_interval=3600.0, history_size=4)
 
     async with app.run_test(size=(120, 32)) as pilot:
         await finish_refresh(app)
@@ -279,7 +279,7 @@ async def test_manual_refresh_preserves_selected_pid_when_rows_reorder() -> None
         snapshot(process(10, name="first"), process(20, name="selected")),
         snapshot(process(20, name="selected"), process(30, name="new")),
     )
-    app = BeerNetworkApp(backend=backend, poll_interval=3600.0)
+    app = AyranNetworkApp(backend=backend, poll_interval=3600.0)
 
     async with app.run_test(size=(110, 28)) as pilot:
         await finish_refresh(app)
@@ -298,7 +298,7 @@ async def test_manual_refresh_preserves_selected_pid_when_rows_reorder() -> None
 @pytest.mark.asyncio
 async def test_slow_sampling_runs_in_background_without_overlapping_refreshes() -> None:
     backend = BlockingBackend(snapshot(process(5)))
-    app = BeerNetworkApp(backend=backend, poll_interval=3600.0)
+    app = AyranNetworkApp(backend=backend, poll_interval=3600.0)
 
     async with app.run_test(size=(100, 26)) as pilot:
         await asyncio.wait_for(backend.started.wait(), timeout=1.0)
@@ -327,7 +327,7 @@ async def test_limited_access_warning_is_visible_without_hiding_rows() -> None:
             warnings=(warning, "Another process was inaccessible."),
         )
     )
-    app = BeerNetworkApp(backend=backend, poll_interval=3600.0)
+    app = AyranNetworkApp(backend=backend, poll_interval=3600.0)
 
     async with app.run_test(size=(110, 28)) as pilot:
         await finish_refresh(app)
@@ -344,7 +344,7 @@ async def test_limited_access_warning_is_visible_without_hiding_rows() -> None:
 @pytest.mark.asyncio
 async def test_sampling_error_is_reported_and_next_refresh_can_recover() -> None:
     backend = FakeBackend(PermissionError("not allowed"), snapshot(process(9)))
-    app = BeerNetworkApp(backend=backend, poll_interval=3600.0)
+    app = AyranNetworkApp(backend=backend, poll_interval=3600.0)
 
     async with app.run_test(size=(100, 26)) as pilot:
         await finish_refresh(app)
@@ -365,11 +365,11 @@ async def test_sampling_error_is_reported_and_next_refresh_can_recover() -> None
 
 def test_constructor_validates_polling_configuration_and_declares_keys() -> None:
     with pytest.raises(ValueError, match="poll_interval"):
-        BeerNetworkApp(poll_interval=0.0)
+        AyranNetworkApp(poll_interval=0.0)
     with pytest.raises(ValueError, match="history_size"):
-        BeerNetworkApp(history_size=1)
+        AyranNetworkApp(history_size=1)
 
-    keys = {binding.key for binding in BeerNetworkApp.BINDINGS if isinstance(binding, Binding)}
+    keys = {binding.key for binding in AyranNetworkApp.BINDINGS if isinstance(binding, Binding)}
     assert {"q", "r", "g", "k", "s"} <= keys
 
 
@@ -384,7 +384,7 @@ async def test_focus_mode_splits_tables_and_preserves_selection_at_80_columns() 
         ),
         snapshot(process(20, name="chat"), process(50, name="browser")),
     )
-    app = BeerNetworkApp(
+    app = AyranNetworkApp(
         backend=backend,
         classifier=FocusClassifier(("game.exe",)),
         geoip_enabled=False,
@@ -441,7 +441,7 @@ async def test_focus_mode_splits_tables_and_preserves_selection_at_80_columns() 
 async def test_geoip_defaults_on_deduplicates_hosts_and_updates_flags(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("BEER_NETWORK_GEOIP_ENABLED", raising=False)
+    monkeypatch.delenv("AYRAN_NETWORK_GEOIP_ENABLED", raising=False)
     host = "8.8.8.8"
     resolver = FakeGeoIPResolver(
         {host: GeoIPResult(success=True, country_code="US", country="United States", flag="🇺🇸")}
@@ -460,7 +460,7 @@ async def test_geoip_defaults_on_deduplicates_hosts_and_updates_flags(
             ),
         )
     )
-    app = BeerNetworkApp(
+    app = AyranNetworkApp(
         backend=backend,
         geoip_resolver=resolver,
         poll_interval=3600.0,
@@ -480,7 +480,7 @@ async def test_geoip_defaults_on_deduplicates_hosts_and_updates_flags(
 async def test_geoip_environment_toggle_disables_and_restores_flag_display(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("BEER_NETWORK_GEOIP_ENABLED", "off")
+    monkeypatch.setenv("AYRAN_NETWORK_GEOIP_ENABLED", "off")
     host = "1.1.1.1"
     resolver = FakeGeoIPResolver(
         {host: GeoIPResult(success=True, country_code="AU", country="Australia", flag="🇦🇺")}
@@ -494,7 +494,7 @@ async def test_geoip_environment_toggle_disables_and_restores_flag_display(
             )
         )
     )
-    app = BeerNetworkApp(
+    app = AyranNetworkApp(
         backend=backend,
         geoip_resolver=resolver,
         poll_interval=3600.0,
@@ -539,7 +539,7 @@ async def test_geoip_refresh_does_not_start_an_overlapping_lookup() -> None:
         )
     )
     backend = FakeBackend(first, first)
-    app = BeerNetworkApp(
+    app = AyranNetworkApp(
         backend=backend,
         geoip_resolver=resolver,
         poll_interval=3600.0,
@@ -564,7 +564,7 @@ async def test_process_action_requires_confirmation_and_uses_snapshot_identity()
     target = process(77, name="worker", create_time=1234.5)
     backend = FakeBackend(snapshot(target), snapshot(target))
     controller = FakeProcessController(success=True)
-    app = BeerNetworkApp(
+    app = AyranNetworkApp(
         backend=backend,
         process_controller=controller,
         geoip_enabled=False,
@@ -609,7 +609,7 @@ async def test_process_action_requires_confirmation_and_uses_snapshot_identity()
 @pytest.mark.asyncio
 async def test_empty_table_never_opens_confirmation_or_calls_controller() -> None:
     controller = FakeProcessController(success=False)
-    app = BeerNetworkApp(
+    app = AyranNetworkApp(
         backend=FakeBackend(snapshot()),
         process_controller=controller,
         geoip_enabled=False,
@@ -636,7 +636,7 @@ async def test_empty_table_never_opens_confirmation_or_calls_controller() -> Non
 async def test_process_controller_failure_is_reported_as_error_notification() -> None:
     target = process(88, name="protected", create_time=987.0)
     controller = FakeProcessController(success=False)
-    app = BeerNetworkApp(
+    app = AyranNetworkApp(
         backend=FakeBackend(snapshot(target)),
         process_controller=controller,
         geoip_enabled=False,

@@ -10,7 +10,7 @@ from typing import Any
 import psutil
 import pytest
 
-from beer_network.backend import (
+from ayran_network.backend import (
     PROCESS_RATE_ESTIMATE_BASIS,
     GlobalRates,
     PsutilNetworkBackend,

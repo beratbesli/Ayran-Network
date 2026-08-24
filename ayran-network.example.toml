@@ -1,5 +1,5 @@
-# Beer-Network Configuration File
-# Copy to ~/.config/beer-network/config.toml or ~/.beer-network/config.toml
+# Ayran-Network Configuration File
+# Copy to ~/.config/ayran-network/config.toml or ~/.ayran-network/config.toml
 
 [general]
 # Polling interval in seconds (default: 1.0)
@@ -28,5 +28,5 @@ enabled = true
 filter = ""
 
 [export]
-# Export snapshots output directory (default: ~/.beer-network/exports)
-# directory = "~/.beer-network/exports"
+# Export snapshots output directory (default: ~/.ayran-network/exports)
+# directory = "~/.ayran-network/exports"

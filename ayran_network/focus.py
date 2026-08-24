@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final
 
-from beer_network.backend import ProcessSnapshot
+from ayran_network.backend import ProcessSnapshot
 
 __all__ = [
     "DEFAULT_FOCUS_APPS",
@@ -20,7 +20,7 @@ __all__ = [
     "split_processes",
 ]
 
-FOCUS_APPS_ENV: Final = "BEER_NETWORK_FOCUS_APPS"
+FOCUS_APPS_ENV: Final = "AYRAN_NETWORK_FOCUS_APPS"
 
 # Each entry is a process name used by a supported game. Name normalization
 # handles executable suffixes, capitalization, and punctuation differences.
@@ -90,7 +90,7 @@ class FocusClassifier:
         cls,
         environ: Mapping[str, str] | None = None,
     ) -> FocusClassifier:
-        """Build a classifier from ``BEER_NETWORK_FOCUS_APPS``.
+        """Build a classifier from ``AYRAN_NETWORK_FOCUS_APPS``.
 
         A comma-, semicolon-, or newline-separated value replaces the defaults.
         Prefixing the complete value with ``+`` extends the defaults instead.
