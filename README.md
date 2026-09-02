@@ -8,7 +8,7 @@
 [![UI: Textual](https://img.shields.io/badge/TUI-Textual-00d2ff.svg)](https://textual.textualize.io/)
 [![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)](https://www.kernel.org/)
 
-**A modern, responsive Linux terminal dashboard for real-time network traffic observation, per-process connection tracking, and bandwidth diagnostics.**
+**A modern, responsive Linux terminal dashboard for real-time network observation, per-process connection tracking, and host bandwidth diagnostics.**
 
 [Key Features](#-key-features) •
 [Installation](#-installation) •
@@ -46,11 +46,11 @@
 
 - 📊 **Real-Time Bandwidth Sparklines**: Live host-wide upload and download rate meters featuring animated Unicode sparklines and cumulative transfer counters.
 - 🎯 **Intelligent Focus Mode**: Automatically separates interactive foreground applications (browsers, games, media apps) from background system daemons for cleaner monitoring.
-- 🌍 **Privacy-Conscious Geo-IP Resolution**: Enriches public remote endpoints with ISO country codes and flag emojis. Local cached lookups with strict timeout guards and zero leakage of private/local IP subnets.
+- 🌍 **Privacy-Conscious Geo-IP Resolution**: Disabled by default. When enabled, only public unicast IPs are sent over HTTPS to the configured third-party service; private/local addresses never leave the machine.
 - 🔍 **Live Search & Filter**: Instant dynamic filtering across process names and PIDs by pressing <kbd>F</kbd>.
 - 🛡️ **Guarded Process Management**: Safely Suspend (<kbd>S</kbd>), Resume (<kbd>U</kbd>), or Terminate (<kbd>K</kbd>) misbehaving network consumers directly from the TUI with built-in confirmation dialogs.
-- 🔬 **Deep Process Inspection Modal**: Press <kbd>D</kbd> to inspect complete socket connection trees, local/remote IP endpoints, port numbers, connection states (`ESTABLISHED`, `LISTEN`, `TIME_WAIT`), and traffic score histories.
-- 📁 **Snapshot Data Export**: One-touch export (<kbd>E</kbd>) of complete system network state snapshots to structured **JSON Lines** and **CSV** files (`~/.ayran-network/exports/`).
+- 🔬 **Deep Process Inspection Modal**: Press <kbd>D</kbd> to inspect complete socket connection trees, local/remote IP endpoints, port numbers, connection states (`ESTABLISHED`, `LISTEN`, `TIME_WAIT`), and connection-activity histories.
+- 📁 **Snapshot Data Export**: One-touch export (<kbd>E</kbd>) of complete system network state snapshots to structured **JSON Lines** and summary **CSV** files (`~/.ayran-network/exports/`).
 - 🎛️ **Interface Filtering**: Support for excluding virtual bridges, container interfaces (`docker`, `veth`, `virbr`), and loopback devices.
 - ⚡ **Asynchronous & Non-Blocking**: High-frequency sampling runs on a dedicated background loop ensuring butter-smooth UI responsiveness without terminal stutter.
 
@@ -80,12 +80,13 @@ pip install -e .
 
 ### Running Ayran-Network
 
-Run directly as a module or through the console entry point:
+The `ayranetwork` command is the package's real console entry point (not an alias):
 
 ```bash
 # Run with console command
 ayranetwork
 
+# A new terminal needs the virtual environment activated again
 # Or run via Python module
 python3 -m ayran_network
 ```
@@ -99,7 +100,7 @@ python3 -m ayran_network
 | <kbd>F</kbd> | **Search** | Filter process list in real time by name or PID |
 | <kbd>Esc</kbd> | **Clear** | Clear active search filter and restore full list |
 | <kbd>D</kbd> | **Details** | Open comprehensive process inspection modal |
-| <kbd>G</kbd> | **Geo-IP** | Toggle Geo-IP remote address enrichment on / off |
+| <kbd>G</kbd> | **Geo-IP** | Toggle opt-in public-IP enrichment; enabling shows a privacy warning |
 | <kbd>K</kbd> | **Kill** | Terminate selected process (with confirmation) |
 | <kbd>S</kbd> | **Suspend** | Pause / freeze selected process execution |
 | <kbd>U</kbd> | **Resume** | Unfreeze selected process |
@@ -136,7 +137,8 @@ apps = ["BeamNG.drive", "Elden Ring", "Fortnite", "steam", "discord", "firefox",
 extend_defaults = true  # Merge with built-in app defaults
 
 [geoip]
-enabled = true          # Enable remote IP country lookup & flags
+enabled = false         # Opt in to sending public IPs to the HTTPS Geo-IP service
+endpoint = "https://ipwho.is/{encoded_ip}"
 
 [interface]
 filter = "no-virtual"   # Options: "no-virtual", "exclude:docker,veth", "include:eth0"
@@ -150,10 +152,28 @@ directory = "~/.ayran-network/exports"
 | Variable | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `AYRAN_NETWORK_CONFIG` | `string` | `""` | Explicit path to TOML configuration file |
-| `AYRAN_NETWORK_GEOIP_ENABLED` | `bool` | `true` | Toggle Geo-IP enrichment (`1`/`0`, `true`/`false`) |
+| `AYRAN_NETWORK_GEOIP_ENABLED` | `bool` | `false` | Toggle Geo-IP enrichment (`1`/`0`, `true`/`false`) |
+| `AYRAN_NETWORK_GEOIP_ENDPOINT` | `string` | `https://ipwho.is/{encoded_ip}` | HTTPS endpoint template |
+| `AYRAN_NETWORK_POLL_INTERVAL` | `float` | `1.0` | Sampling interval in seconds |
+| `AYRAN_NETWORK_HISTORY_SIZE` | `int` | `60` | History points (minimum 2) |
 | `AYRAN_NETWORK_FOCUS_APPS` | `string` | `""` | Comma-separated app names (prefix with `+` to extend) |
 | `AYRAN_NETWORK_INTERFACE_FILTER` | `string` | `""` | Filter mode (`no-virtual`, `exclude:...`, `include:...`) |
 | `AYRAN_NETWORK_EXPORT_DIR` | `string` | `~/.ayran-network/exports` | Output directory for snapshot exports |
+
+CLI flags override environment variables, which override TOML, which override defaults.
+Invalid values fall back safely with a warning. `--config`, `--poll-interval`,
+`--history-size`, `--geoip`/`--no-geoip`, `--interface-filter`, and `--export-dir`
+are supported.
+
+The host-wide sparklines measure system counters. Per-process **Connection Activity**
+is derived from visible connection count/state; it is not per-process bandwidth.
+CSV is intentionally a one-row-per-process summary; JSONL contains every connection,
+process identity, warnings, global rates, timestamp, and runtime metadata. Export files
+are created with 0600 permissions in a 0700 directory where the operating system allows it.
+
+Geo-IP is never contacted while disabled. Pressing `G` to enable it warns that public
+IP addresses will be sent to a third-party HTTPS service. Standard users may see limited
+process socket details; elevated privileges may be required for system-wide visibility.
 
 ---
 

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
+import subprocess
+import sys
 from collections import deque
 from typing import TypeAlias
 
@@ -23,6 +26,7 @@ from ayran_network.backend import (
     ProcessConnection,
     ProcessSnapshot,
 )
+from ayran_network.config import AyranNetworkConfig
 from ayran_network.focus import FocusClassifier
 from ayran_network.geoip import GeoIPResult
 from ayran_network.process_control import ProcessAction, ProcessActionResult
@@ -364,6 +368,43 @@ async def test_search_empty_result_is_visible() -> None:
         await pilot.pause()
         assert app.query_one("#search-empty", Static).display
         assert app.query_one("#process-table", ProcessTable).row_count == 0
+
+
+def test_config_is_injected_into_app_runtime() -> None:
+    config = AyranNetworkConfig(
+        poll_interval=0.25,
+        history_size=8,
+        focus_apps=("custom-app",),
+        focus_extend_defaults=False,
+        geoip_enabled=False,
+        interface_filter="no-virtual",
+        export_dir="~/custom-exports",
+    )
+    classifier = FocusClassifier(("custom-app",))
+    app = AyranNetworkApp(config=config, backend=FakeBackend(), classifier=classifier)
+
+    assert app.poll_interval == 0.25
+    assert app._upload_history.maxlen == 8
+    assert classifier.matches("custom-app")
+    assert not classifier.matches("firefox")
+    assert app.config.export_dir == "~/custom-exports"
+
+
+def test_module_and_console_entrypoint_smoke() -> None:
+    module = subprocess.run(
+        [sys.executable, "-m", "ayran_network", "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert module.returncode == 0
+    assert "usage: ayranetwork" in module.stdout
+
+    command = shutil.which("ayranetwork")
+    if command is not None:
+        console = subprocess.run([command, "--help"], check=False, capture_output=True, text=True)
+        assert console.returncode == 0
+        assert "usage: ayranetwork" in console.stdout
 
 
 @pytest.mark.asyncio

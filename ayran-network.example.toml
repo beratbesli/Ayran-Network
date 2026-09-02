@@ -16,8 +16,9 @@ apps = ["BeamNG.drive", "Elden Ring", "Fortnite", "steam", "discord", "firefox",
 extend_defaults = true
 
 [geoip]
-# Enable remote IP country lookup & flags (default: true)
-enabled = true
+# Opt-in: public IP addresses may be sent to an HTTPS third-party service (default: false)
+enabled = false
+# endpoint = "https://ipwho.is/{encoded_ip}"
 
 [interface]
 # Interface filtering:
