@@ -296,6 +296,10 @@ class PsutilNetworkBackend:
 
         if grouped_connections is not None and pid in grouped_connections:
             raw_connections = grouped_connections[pid]
+        elif grouped_connections is not None and isinstance(process, psutil.Process):
+            # A successful system-wide listing also tells us that this process has
+            # no visible sockets; avoid an expensive per-process syscall.
+            raw_connections = []
         else:
             try:
                 connection_reader = getattr(process, "net_connections", None)

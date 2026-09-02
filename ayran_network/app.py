@@ -1140,7 +1140,11 @@ class AyranNetworkApp(App[None]):
             self.notify(
                 result.message,
                 title="Process Control",
-                severity="information" if result.success else "error",
+                severity=(
+                    "warning"
+                    if result.success and result.process_exited is False
+                    else "information" if result.success else "error"
+                ),
             )
             if result.success:
                 self.request_refresh()

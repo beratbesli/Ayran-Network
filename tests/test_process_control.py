@@ -33,6 +33,7 @@ class FakeProcess:
         self._create_time = create_time
         self._action_error = action_error
         self.actions: list[str] = []
+        self.wait_result: BaseException | None = None
 
     def name(self) -> str:
         return self._name
@@ -48,6 +49,11 @@ class FakeProcess:
 
     def resume(self) -> None:
         self._record_action("resume")
+
+    def wait(self, *, timeout: float) -> None:
+        assert timeout == 0.2
+        if self.wait_result is not None:
+            raise self.wait_result
 
     def _record_action(self, action: str) -> None:
         if self._action_error is not None:
@@ -136,6 +142,22 @@ async def test_controller_facade_delegates_to_public_actions(
 
     assert result.success is True
     assert fake_process.actions == ["terminate"]
+
+
+@pytest.mark.asyncio
+async def test_terminate_reports_signal_and_exit_state_separately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_process = FakeProcess(46)
+    fake_process.wait_result = psutil.TimeoutExpired(0.2)
+    monkeypatch.setattr(psutil, "Process", lambda pid: fake_process)
+
+    result = await terminate_process(46)
+
+    assert result.success is True
+    assert result.signal_sent is True
+    assert result.process_exited is False
+    assert "still running" in result.message
 
 
 @pytest.mark.asyncio
