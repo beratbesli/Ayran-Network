@@ -10,7 +10,7 @@ def test_default_config() -> None:
     assert config.poll_interval == 1.0
     assert config.history_size == 60
     assert config.focus_extend_defaults is True
-    assert config.geoip_enabled is True
+    assert config.geoip_enabled is False
     assert config.focus_apps == ()
 
 

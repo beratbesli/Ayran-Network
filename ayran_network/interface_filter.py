@@ -54,6 +54,13 @@ class InterfaceFilter:
         """
         source = os.environ if environ is None else environ
         raw = source.get(INTERFACE_FILTER_ENV, "").strip()
+        return cls.from_value(raw)
+
+    @classmethod
+    def from_value(cls, raw: str) -> InterfaceFilter:
+        """Build a filter from the same value accepted by the environment."""
+
+        raw = raw.strip()
 
         if not raw:
             return cls()
@@ -89,6 +96,12 @@ class InterfaceFilter:
             return not any(p.search(name) for p in self.excluded_patterns)
 
         return True
+
+    @property
+    def active(self) -> bool:
+        """Return whether this filter has any include/exclude rules."""
+
+        return bool(self.included_patterns or self.excluded_patterns)
 
     def filter_interfaces(self, interfaces: Mapping[str, T]) -> dict[str, T]:
         """Filter a dictionary of interfaces by name."""

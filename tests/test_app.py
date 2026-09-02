@@ -257,7 +257,7 @@ async def test_snapshot_updates_metrics_sparklines_and_process_table() -> None:
             "User",
             "Status",
             "Connections",
-            "Traffic Level",
+                "Connection Activity",
             "Remote Endpoint",
         ]
         row = table.get_row_at(0)
@@ -424,7 +424,7 @@ async def test_focus_mode_splits_tables_and_preserves_selection_at_80_columns() 
             "Name",
             "State",
             "Conn",
-            "Traffic",
+                "Activity",
             "Remote",
         ]
 
@@ -464,6 +464,7 @@ async def test_geoip_defaults_on_deduplicates_hosts_and_updates_flags(
         backend=backend,
         geoip_resolver=resolver,
         poll_interval=3600.0,
+        geoip_enabled=True,
     )
 
     async with app.run_test(size=(120, 30)) as pilot:
@@ -543,6 +544,7 @@ async def test_geoip_refresh_does_not_start_an_overlapping_lookup() -> None:
         backend=backend,
         geoip_resolver=resolver,
         poll_interval=3600.0,
+        geoip_enabled=True,
     )
 
     async with app.run_test(size=(120, 28)) as pilot:
@@ -659,5 +661,3 @@ async def test_process_controller_failure_is_reported_as_error_notification() ->
             and notification.severity == "error"
             for notification in notifications
         )
-
-

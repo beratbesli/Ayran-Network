@@ -12,13 +12,18 @@ import asyncio
 import socket
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Final
 
 import psutil
 
+from ayran_network.interface_filter import InterfaceFilter
+
 # Machine-readable label for the per-process estimation strategy.
-PROCESS_RATE_ESTIMATE_BASIS: Final = "visible_connection_activity_share"
+PROCESS_ACTIVITY_BASIS: Final = "visible_connection_activity"
+# Kept as a source compatibility alias for integrations written before the UI
+# clarified that this value is not a bandwidth measurement.
+PROCESS_RATE_ESTIMATE_BASIS: Final = PROCESS_ACTIVITY_BASIS
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +86,12 @@ class ProcessSnapshot:
 
         return self.username
 
+    @property
+    def connection_activity_score(self) -> float:
+        """Return activity derived from connection count and state."""
+
+        return self.activity_score
+
 
 
 
@@ -93,6 +104,7 @@ class NetworkSnapshot:
     processes: tuple[ProcessSnapshot, ...]
     limited_access: bool
     warnings: tuple[str, ...]
+    metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,11 +123,17 @@ class _UnratedProcess:
 class PsutilNetworkBackend:
     """Collect psutil network data without blocking the asyncio event loop."""
 
-    def __init__(self, *, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        interface_filter: InterfaceFilter | None = None,
+    ) -> None:
         self._clock = clock
         self._previous_counters: _CounterSample | None = None
         self._latest_snapshot: NetworkSnapshot | None = None
         self._sample_lock = asyncio.Lock()
+        self.interface_filter = interface_filter or InterfaceFilter()
 
     @property
     def latest_snapshot(self) -> NetworkSnapshot | None:
@@ -148,7 +166,7 @@ class PsutilNetworkBackend:
 
     def _read_global_rates(self, sampled_at: float) -> tuple[GlobalRates, str | None]:
         try:
-            counters: Any = psutil.net_io_counters()
+            counters: Any = self._read_io_counters()
         except (psutil.AccessDenied, OSError) as error:
             return self._unavailable_global_rates(), _format_counter_warning(error)
 
@@ -163,6 +181,23 @@ class PsutilNetworkBackend:
         global_rates = self._calculate_global_rates(current_counters)
         self._previous_counters = current_counters
         return global_rates, None
+
+    def _read_io_counters(self) -> Any:
+        if not self.interface_filter.active:
+            return psutil.net_io_counters()
+        try:
+            per_interface = psutil.net_io_counters(pernic=True)
+        except TypeError:
+            return psutil.net_io_counters()
+        selected = self.interface_filter.filter_interfaces(per_interface)
+        return type(
+            "NetworkCounters",
+            (),
+            {
+                "bytes_sent": sum(int(value.bytes_sent) for value in selected.values()),
+                "bytes_recv": sum(int(value.bytes_recv) for value in selected.values()),
+            },
+        )()
 
     def _unavailable_global_rates(self) -> GlobalRates:
         previous = self._previous_counters
@@ -200,13 +235,16 @@ class PsutilNetworkBackend:
     def _collect_processes(self) -> tuple[list[_UnratedProcess], list[str]]:
         processes: list[_UnratedProcess] = []
         warnings: list[str] = []
+        grouped_connections, connection_warning = self._collect_system_connections()
+        if connection_warning is not None:
+            warnings.append(connection_warning)
         try:
             process_iterator = psutil.process_iter(
                 attrs=("pid", "name", "username", "status", "create_time"),
                 ad_value=None,
             )
             for process in process_iterator:
-                unrated = self._read_process(process, warnings)
+                unrated = self._read_process(process, warnings, grouped_connections)
                 if unrated is not None:
                     processes.append(unrated)
         except psutil.AccessDenied as error:
@@ -218,10 +256,27 @@ class PsutilNetworkBackend:
         processes.sort(key=lambda process: process.snapshot.pid)
         return processes, warnings
 
+    def _collect_system_connections(
+        self,
+    ) -> tuple[dict[int, list[Any]] | None, str | None]:
+        """Read sockets once, with per-process fallback for restricted systems."""
+
+        try:
+            raw_connections = psutil.net_connections(kind="inet")
+        except (psutil.AccessDenied, OSError) as error:
+            return None, f"System connection listing unavailable ({type(error).__name__})."
+        grouped: dict[int, list[Any]] = {}
+        for connection in raw_connections:
+            pid = getattr(connection, "pid", None)
+            if pid is not None:
+                grouped.setdefault(int(pid), []).append(connection)
+        return grouped, None
+
     def _read_process(
         self,
         process: psutil.Process,
         warnings: list[str],
+        grouped_connections: dict[int, list[Any]] | None,
     ) -> _UnratedProcess | None:
         try:
             info = process.info
@@ -239,35 +294,38 @@ class PsutilNetworkBackend:
             warnings.append(warning)
             return _limited_process(pid=pid, warning=warning)
 
-        try:
-            connection_reader = getattr(process, "net_connections", None)
-            if connection_reader is None:
-                # Process.net_connections was added after the oldest supported
-                # psutil release; Process.connections is its compatible predecessor.
-                connection_reader = process.connections
-            raw_connections = connection_reader(kind="inet")
-        except (psutil.NoSuchProcess, psutil.ZombieProcess):
-            return None
-        except psutil.AccessDenied as error:
-            warning = _format_process_warning(pid, error)
-            warnings.append(warning)
-            return _UnratedProcess(
-                snapshot=ProcessSnapshot(
-                    pid=pid,
-                    name=name,
-                    username=username,
-                    status=status,
-                    connections=(),
-                    connection_count=0,
-                    established_connection_count=0,
-                    listening_connection_count=0,
+        if grouped_connections is not None and pid in grouped_connections:
+            raw_connections = grouped_connections[pid]
+        else:
+            try:
+                connection_reader = getattr(process, "net_connections", None)
+                if connection_reader is None:
+                    # Process.net_connections was added after the oldest supported
+                    # psutil release; Process.connections is its compatible predecessor.
+                    connection_reader = process.connections
+                raw_connections = connection_reader(kind="inet")
+            except (psutil.NoSuchProcess, psutil.ZombieProcess):
+                return None
+            except psutil.AccessDenied as error:
+                warning = _format_process_warning(pid, error)
+                _append_warning(warnings, warning)
+                return _UnratedProcess(
+                    snapshot=ProcessSnapshot(
+                        pid=pid,
+                        name=name,
+                        username=username,
+                        status=status,
+                        connections=(),
+                        connection_count=0,
+                        established_connection_count=0,
+                        listening_connection_count=0,
+                        activity_score=0.0,
+                        rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
+                        limited_access=True,
+                        warning=warning,
+                    ),
                     activity_score=0.0,
-                    rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
-                    limited_access=True,
-                    warning=warning,
-                ),
-                activity_score=0.0,
-            )
+                )
 
         connections = tuple(
             sorted(
@@ -411,12 +469,20 @@ def _format_counter_warning(error: BaseException) -> str:
     return f"Network I/O counters unavailable ({type(error).__name__})."
 
 
+def _append_warning(warnings: list[str], warning: str, *, limit: int = 32) -> None:
+    """Keep access warnings useful without letting them grow without bound."""
+
+    if warning not in warnings and len(warnings) < limit:
+        warnings.append(warning)
+
+
 NetworkBackend = PsutilNetworkBackend
 
 __all__ = [
     "GlobalRates",
     "NetworkBackend",
     "NetworkSnapshot",
+    "PROCESS_ACTIVITY_BASIS",
     "PROCESS_RATE_ESTIMATE_BASIS",
     "ProcessConnection",
     "ProcessSnapshot",

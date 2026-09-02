@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import math
-import os
 import re
 import unicodedata
 from collections import deque
 from collections.abc import Sequence
-from datetime import datetime, timezone
 from functools import partial
 from ipaddress import ip_address
 from typing import Final, Protocol
@@ -23,9 +22,11 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Sparkline, Static
 
 from ayran_network.backend import NetworkSnapshot, ProcessSnapshot, PsutilNetworkBackend
-from ayran_network.export import export_csv, export_json
+from ayran_network.config import AyranNetworkConfig, load_config
+from ayran_network.export import write_snapshot_exports
 from ayran_network.focus import FocusClassifier, FocusSelection
 from ayran_network.geoip import GeoIPResolver, GeoIPResult
+from ayran_network.interface_filter import InterfaceFilter
 from ayran_network.process_control import ProcessAction, ProcessActionResult, ProcessController
 
 DEFAULT_POLL_INTERVAL = 1.0
@@ -33,18 +34,6 @@ DEFAULT_HISTORY_SIZE = 60
 MAX_GEOIP_LOOKUPS_PER_BATCH = 8
 
 _COMPACT_LAYOUT_MAX_WIDTH: Final = 90
-_AI_RESULT_MAX_CHARACTERS: Final = 4_000
-_AI_FIELD_MAX_CHARACTERS: Final = 160
-_AI_UNEXPECTED_ERROR: Final = "AI analysis failed unexpectedly. Please try again."
-_AI_PRIVACY_NOTE: Final = (
-    "Shared fields: process name/status, ports, socket states/types/families, connection "
-    "counts, estimated rates, and the estimate basis. IP addresses, PID, and username "
-    "are not sent."
-)
-_AI_ADVISORY_WARNING: Final = (
-    "Advisory only: network telemetry cannot prove that a process is safe or malicious. "
-    "Verify the result independently; AI analysis never triggers process actions."
-)
 _ANSI_ESCAPE_PATTERN: Final = re.compile(
     r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-_])"
 )
@@ -64,9 +53,6 @@ _BIDI_CONTROL_CHARACTERS: Final[frozenset[str]] = frozenset(
         "\u2069",
     }
 )
-_FALSE_LIKE_VALUES: Final[frozenset[str]] = frozenset(
-    {"", "0", "f", "false", "n", "no", "off", "disable", "disabled"}
-)
 _PROCESS_TABLE_IDS: Final[tuple[str, ...]] = (
     "process-table",
     "focused-process-table",
@@ -78,7 +64,7 @@ _WIDE_COLUMNS: Final[tuple[tuple[str, str, int], ...]] = (
     ("User", "user", 14),
     ("Status", "status", 10),
     ("Connections", "connections", 11),
-    ("Traffic Level", "estimated-speed", 18),
+    ("Connection Activity", "activity", 18),
     ("Remote Endpoint", "remote-endpoint", 28),
 )
 _COMPACT_COLUMNS: Final[tuple[tuple[str, str, int], ...]] = (
@@ -86,7 +72,7 @@ _COMPACT_COLUMNS: Final[tuple[tuple[str, str, int], ...]] = (
     ("Name", "name", 14),
     ("State", "status", 8),
     ("Conn", "connections", 4),
-    ("Traffic", "estimated-speed", 17),
+    ("Activity", "activity", 17),
     ("Remote", "remote-endpoint", 16),
 )
 
@@ -490,49 +476,75 @@ class AyranNetworkApp(App[None]):
         height: 3;
         margin-bottom: 1;
     }
+
+    #search-empty {
+        display: none;
+        height: 2;
+        padding: 0 1;
+        color: $warning;
+    }
     """
 
     def __init__(
         self,
         *,
         backend: NetworkSampler | None = None,
-        poll_interval: float = DEFAULT_POLL_INTERVAL,
-        history_size: int = DEFAULT_HISTORY_SIZE,
+        poll_interval: float | None = None,
+        history_size: int | None = None,
         classifier: ProcessClassifier | None = None,
         geoip_resolver: GeoIPLookup | None = None,
         process_controller: ProcessControl | None = None,
         geoip_enabled: bool | None = None,
+        config: AyranNetworkConfig | None = None,
     ) -> None:
-        if not math.isfinite(poll_interval) or poll_interval <= 0.0:
+        effective_config = config if config is not None else load_config()
+        effective_poll_interval = (
+            effective_config.poll_interval if poll_interval is None else poll_interval
+        )
+        effective_history_size = (
+            effective_config.history_size if history_size is None else history_size
+        )
+        if not math.isfinite(effective_poll_interval) or effective_poll_interval <= 0.0:
             raise ValueError("poll_interval must be a positive finite number")
-        if history_size < 2:
+        if effective_history_size < 2:
             raise ValueError("history_size must be at least two")
 
         super().__init__()
-        self.backend: NetworkSampler = backend if backend is not None else PsutilNetworkBackend()
-        self.poll_interval = poll_interval
-        self.classifier: ProcessClassifier = (
-            classifier if classifier is not None else FocusClassifier.from_environment()
+        self.config = effective_config
+        self.backend: NetworkSampler = backend if backend is not None else PsutilNetworkBackend(
+            interface_filter=InterfaceFilter.from_value(effective_config.interface_filter)
         )
+        self.poll_interval = effective_poll_interval
+        self.classifier: ProcessClassifier
+        if classifier is None:
+            focus_names = effective_config.focus_apps
+            if effective_config.focus_extend_defaults:
+                from ayran_network.focus import DEFAULT_FOCUS_APPS
+
+                focus_names = (*DEFAULT_FOCUS_APPS, *focus_names)
+            self.classifier = FocusClassifier(focus_names)
+        else:
+            self.classifier = classifier
         self.geoip_resolver: GeoIPLookup = (
-            geoip_resolver if geoip_resolver is not None else GeoIPResolver()
+            geoip_resolver
+            if geoip_resolver is not None
+            else GeoIPResolver(endpoint_template=effective_config.geoip_endpoint)
         )
         self.process_controller: ProcessControl = (
             process_controller if process_controller is not None else ProcessController()
         )
         self._owns_geoip_resolver = geoip_resolver is None
         self._geoip_enabled = (
-            _geoip_enabled_from_environment() if geoip_enabled is None else geoip_enabled
+            effective_config.geoip_enabled if geoip_enabled is None else geoip_enabled
         )
 
-        self._upload_history: deque[float] = deque([0.0, 0.0], maxlen=history_size)
-        self._download_history: deque[float] = deque([0.0, 0.0], maxlen=history_size)
+        self._upload_history: deque[float] = deque([0.0, 0.0], maxlen=effective_history_size)
+        self._download_history: deque[float] = deque([0.0, 0.0], maxlen=effective_history_size)
         self._latest_snapshot: NetworkSnapshot | None = None
         self._refresh_running = False
         self._shutting_down = False
         self._process_action_running = False
         self._confirmation_open = False
-        self._analysis_running = False
         self._focus_mode_active = False
         self._compact_layout: bool | None = None
         self._rendering_tables = False
@@ -545,7 +557,7 @@ class AyranNetworkApp(App[None]):
         self._geoip_pending_hosts: set[str] = set()
         self._geoip_lookup_running = False
         self._geoip_generation = 0
-        self._history_size = history_size
+        self._history_size = effective_history_size
         self._process_activity_history: dict[int, deque[float]] = {}
         
         self._search_query: str = ""
@@ -579,9 +591,10 @@ class AyranNetworkApp(App[None]):
                 yield Static("Total received: 0 B", id="download-total", classes="metric-total")
         yield Static("Waiting for the first network sample...", id="status")
         with Vertical(id="normal-process-layout"):
-            yield Static("Active Process Traffic", classes="section-title")
-            yield Input(placeholder="Search processes... (Press Esc to cancel)", id="search-input")
+            yield Static("Active Process Connections", classes="section-title")
             yield ProcessTable(id="process-table", cursor_type="row", zebra_stripes=True)
+        yield Input(placeholder="Search processes by name or PID (Esc clears)", id="search-input")
+        yield Static("No processes match the current search.", id="search-empty")
         with Vertical(id="focus-process-layout"):
             yield Static("FOCUS MODE", id="focus-mode-banner")
             yield Static("Focused App Traffic", classes="section-title")
@@ -596,6 +609,7 @@ class AyranNetworkApp(App[None]):
         self.query_one("#focus-process-layout", Vertical).display = False
         search_input = self.query_one("#search-input", Input)
         search_input.display = False
+        self.query_one("#search-empty", Static).display = False
         self.query_one("#process-table", ProcessTable).focus()
 
         self._configure_process_tables(self.size.width <= _COMPACT_LAYOUT_MAX_WIDTH)
@@ -654,8 +668,14 @@ class AyranNetworkApp(App[None]):
 
         self._geoip_enabled = not self._geoip_enabled
         self._geoip_generation += 1
-        state = "enabled" if self._geoip_enabled else "disabled"
-        self.notify(f"Geo-IP lookups {state}.", title="Geo-IP")
+        if self._geoip_enabled:
+            self.notify(
+                "Geo-IP enabled: public IP addresses will be sent to a third-party HTTPS service.",
+                title="Privacy warning",
+                severity="warning",
+            )
+        else:
+            self.notify("Geo-IP lookups disabled.", title="Geo-IP")
         if self._latest_snapshot is not None:
             self._render_processes(self._latest_snapshot.processes)
 
@@ -685,6 +705,7 @@ class AyranNetworkApp(App[None]):
             search_input.value = ""
             search_input.display = False
             self._search_query = ""
+            self.query_one("#search-empty", Static).display = False
             if self._latest_snapshot:
                 self._render_processes(self._latest_snapshot.processes)
             self.query_one(f"#{self._last_active_table_id}", ProcessTable).focus()
@@ -718,22 +739,15 @@ class AyranNetworkApp(App[None]):
 
     @work(exclusive=True, group="export")
     async def _do_export(self, snapshot: NetworkSnapshot) -> None:
-        from pathlib import Path
-
         try:
-            export_dir = Path.home() / ".ayran-network" / "exports"
-            export_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.fromtimestamp(snapshot.sampled_at, tz=timezone.utc).strftime(
-                "%Y%m%d_%H%M%S"
+            from pathlib import Path
+
+            export_dir = self.config.export_dir or str(Path.home() / ".ayran-network" / "exports")
+            json_path, csv_path = await asyncio.to_thread(
+                write_snapshot_exports, snapshot, export_dir
             )
-            json_path = export_dir / f"snapshot_{timestamp}.jsonl"
-            csv_path = export_dir / f"snapshot_{timestamp}.csv"
-            json_data = export_json(snapshot)
-            csv_data = export_csv(snapshot)
-            await asyncio.to_thread(json_path.write_text, json_data, "utf-8")
-            await asyncio.to_thread(csv_path.write_text, csv_data, "utf-8")
             self.notify(
-                f"Exported to {export_dir}/",
+                f"Exported {json_path.name} and {csv_path.name}.",
                 title="Export",
             )
         except Exception as exc:
@@ -802,10 +816,6 @@ class AyranNetworkApp(App[None]):
         return max(recent) if recent else 0.0
 
     def _render_processes(self, processes: tuple[ProcessSnapshot, ...]) -> None:
-        if self._search_query:
-            query = self._search_query.casefold()
-            processes = tuple(p for p in processes if query in p.name.casefold())
-
         processes = tuple(
             sorted(
                 processes,
@@ -813,6 +823,18 @@ class AyranNetworkApp(App[None]):
                 reverse=True,
             )
         )
+        focus_selection = self.classifier.split(processes)
+        query = self._search_query.casefold().strip()
+
+        def matches(process: ProcessSnapshot) -> bool:
+            return not query or query in process.name.casefold() or query in str(process.pid)
+
+        visible_processes = tuple(process for process in processes if matches(process))
+        visible_focused = tuple(process for process in focus_selection.focused if matches(process))
+        visible_background = tuple(
+            process for process in focus_selection.background if matches(process)
+        )
+        self.query_one("#search-empty", Static).display = bool(query) and not visible_processes
         selected = self._selected_process()
         selected_identity = (
             _process_identity(selected) if selected is not None else self._selected_identity
@@ -821,7 +843,6 @@ class AyranNetworkApp(App[None]):
             table_id: self.query_one(f"#{table_id}", ProcessTable).cursor_row
             for table_id in _PROCESS_TABLE_IDS
         }
-        focus_selection = self.classifier.split(processes)
         focus_changed = focus_selection.active != self._focus_mode_active
         previously_focused = self.focused
 
@@ -834,19 +855,19 @@ class AyranNetworkApp(App[None]):
         try:
             normal_match = self._populate_process_table(
                 "process-table",
-                processes,
+                visible_processes,
                 selected_identity,
                 previous_rows["process-table"],
             )
             focused_match = self._populate_process_table(
                 "focused-process-table",
-                focus_selection.focused,
+                visible_focused,
                 selected_identity,
                 previous_rows["focused-process-table"],
             )
             background_match = self._populate_process_table(
                 "background-process-table",
-                focus_selection.background,
+                visible_background,
                 selected_identity,
                 previous_rows["background-process-table"],
             )
@@ -1258,14 +1279,6 @@ def _display_status(process: ProcessSnapshot) -> str:
     return f"limited · {status}" if process.limited_access else status
 
 
-def _format_estimated_speed(process: ProcessSnapshot, *, compact: bool = False) -> str:
-    upload = format_rate(process.activity_score)
-    download = format_rate(process.activity_score)
-    if compact:
-        return f"↑{upload} ↓{download}"
-    return f"Up {upload} / Down {download}"
-
-
 def _format_endpoint(host: str, port: int | None) -> str:
     display_host = f"[{host}]" if ":" in host else host
     return display_host if port is None else f"{display_host}:{port}"
@@ -1285,11 +1298,6 @@ def _is_public_ip(host: str) -> bool:
         and not address.is_multicast
         and not address.is_unspecified
     )
-
-
-def _geoip_enabled_from_environment() -> bool:
-    raw_value = os.environ.get("AYRAN_NETWORK_GEOIP_ENABLED")
-    return raw_value is None or raw_value.strip().casefold() not in _FALSE_LIKE_VALUES
 
 
 def _ellipsized_text(value: str, length: int) -> Text:
@@ -1358,10 +1366,39 @@ def _format_quantity(value: float) -> str:
     return f"{value:.1f} {units[unit_index]}"
 
 
-def main() -> None:
-    """Run the Ayran-Network terminal application."""
+def main(argv: Sequence[str] | None = None) -> None:
+    """Run the terminal application with CLI-over-environment precedence."""
 
-    AyranNetworkApp().run()
+    parser = argparse.ArgumentParser(prog="ayranetwork")
+    parser.add_argument("--config", help="Path to a TOML configuration file")
+    parser.add_argument("--poll-interval", type=float)
+    parser.add_argument("--history-size", type=int)
+    geoip = parser.add_mutually_exclusive_group()
+    geoip.add_argument("--geoip", dest="geoip_enabled", action="store_true")
+    geoip.add_argument("--no-geoip", dest="geoip_enabled", action="store_false")
+    parser.set_defaults(geoip_enabled=None)
+    parser.add_argument("--interface-filter")
+    parser.add_argument("--export-dir")
+    args = parser.parse_args(argv)
+    config = load_config(args.config)
+    if args.interface_filter is not None or args.export_dir is not None:
+        from dataclasses import replace
+
+        config = replace(
+            config,
+            interface_filter=(
+                args.interface_filter
+                if args.interface_filter is not None
+                else config.interface_filter
+            ),
+            export_dir=args.export_dir if args.export_dir is not None else config.export_dir,
+        )
+    AyranNetworkApp(
+        config=config,
+        poll_interval=args.poll_interval,
+        history_size=args.history_size,
+        geoip_enabled=args.geoip_enabled,
+    ).run()
 
 
 __all__ = [

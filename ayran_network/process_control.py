@@ -33,6 +33,8 @@ class ProcessActionResult:
     error: str | None = None
     observed_name: str | None = None
     observed_create_time: float | None = None
+    signal_sent: bool = False
+    process_exited: bool | None = None
 
     @property
     def ok(self) -> bool:
@@ -198,6 +200,18 @@ def _perform_process_action(
 
         if action == "terminate":
             process.terminate()
+            process_exited = _wait_for_termination(process)
+            message = _termination_message(pid, process_exited)
+            return ProcessActionResult(
+                action=action,
+                pid=pid,
+                success=True,
+                message=message,
+                observed_name=observed_name,
+                observed_create_time=observed_create_time,
+                signal_sent=True,
+                process_exited=process_exited,
+            )
         elif action == "suspend":
             process.suspend()
         elif action == "resume":
@@ -275,3 +289,26 @@ def _identity_mismatch(
         observed_name=observed_name,
         observed_create_time=observed_create_time,
     )
+
+
+def _wait_for_termination(process: psutil.Process) -> bool | None:
+    waiter = getattr(process, "wait", None)
+    if waiter is None:
+        return None
+    try:
+        waiter(timeout=0.2)
+    except psutil.TimeoutExpired:
+        return False
+    except (psutil.NoSuchProcess, psutil.ZombieProcess):
+        return True
+    except (psutil.AccessDenied, OSError):
+        return None
+    return True
+
+
+def _termination_message(pid: int, process_exited: bool | None) -> str:
+    if process_exited is True:
+        return f"Sent terminate signal to PID {pid}; process exited."
+    if process_exited is False:
+        return f"Sent terminate signal to PID {pid}; process is still running."
+    return f"Sent terminate signal to PID {pid}. Exit state could not be verified."
