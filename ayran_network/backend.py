@@ -32,19 +32,6 @@ class GlobalRates:
     download_bytes_per_second: float
     interval_seconds: float
 
-    @property
-    def upload_bps(self) -> float:
-        """Return the upload rate using a compact UI-friendly name."""
-
-        return self.upload_bytes_per_second
-
-    @property
-    def download_bps(self) -> float:
-        """Return the download rate using a compact UI-friendly name."""
-
-        return self.download_bytes_per_second
-
-
 @dataclass(frozen=True, slots=True)
 class ProcessConnection:
     """An immutable representation of one process-owned internet socket."""
@@ -75,21 +62,6 @@ class ProcessSnapshot:
     create_time: float | None = None
     limited_access: bool = False
     warning: str | None = None
-
-    @property
-    def user(self) -> str:
-        """Return the process owner using a concise display-oriented name."""
-
-        return self.username
-
-    @property
-    def connection_activity_score(self) -> float:
-        """Return activity derived from connection count and state."""
-
-        return self.activity_score
-
-
-
 
 @dataclass(frozen=True, slots=True)
 class NetworkSnapshot:
@@ -477,11 +449,8 @@ def _append_warning(warnings: list[str], warning: str, *, limit: int = 32) -> No
         warnings.append(warning)
 
 
-NetworkBackend = PsutilNetworkBackend
-
 __all__ = [
     "GlobalRates",
-    "NetworkBackend",
     "NetworkSnapshot",
     "PROCESS_ACTIVITY_BASIS",
     "ProcessConnection",

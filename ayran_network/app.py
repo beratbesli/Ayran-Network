@@ -5,8 +5,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import math
-import re
-import unicodedata
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import replace
@@ -31,30 +29,9 @@ from ayran_network.geoip import GeoIPResolver, GeoIPResult
 from ayran_network.interface_filter import InterfaceFilter
 from ayran_network.process_control import ProcessAction, ProcessActionResult, ProcessController
 
-DEFAULT_POLL_INTERVAL = 1.0
-DEFAULT_HISTORY_SIZE = 60
 MAX_GEOIP_LOOKUPS_PER_BATCH = 8
 
 _COMPACT_LAYOUT_MAX_WIDTH: Final = 90
-_ANSI_ESCAPE_PATTERN: Final = re.compile(
-    r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-_])"
-)
-_BIDI_CONTROL_CHARACTERS: Final[frozenset[str]] = frozenset(
-    {
-        "\u061c",
-        "\u200e",
-        "\u200f",
-        "\u202a",
-        "\u202b",
-        "\u202c",
-        "\u202d",
-        "\u202e",
-        "\u2066",
-        "\u2067",
-        "\u2068",
-        "\u2069",
-    }
-)
 _PROCESS_TABLE_IDS: Final[tuple[str, ...]] = (
     "process-table",
     "focused-process-table",
@@ -1322,35 +1299,6 @@ def _truncate(value: str, length: int) -> str:
     if len(value) <= length:
         return value
     return f"{value[: length - 1]}\N{HORIZONTAL ELLIPSIS}"
-
-
-def _bounded_terminal_text(
-    value: str,
-    length: int,
-    *,
-    preserve_newlines: bool = False,
-) -> str:
-    """Remove terminal controls and bound untrusted text for literal display."""
-
-    value = value[: max(length * 4, length)]
-    if preserve_newlines:
-        value = value.replace("\r\n", "\n").replace("\r", "\n")
-    without_ansi = _ANSI_ESCAPE_PATTERN.sub("", value)
-    cleaned: list[str] = []
-    for character in without_ansi:
-        if character in _BIDI_CONTROL_CHARACTERS:
-            continue
-        if preserve_newlines and character == "\n":
-            cleaned.append(character)
-            continue
-        codepoint = ord(character)
-        if codepoint < 0x20 or 0x7F <= codepoint <= 0x9F:
-            cleaned.append(" ")
-            continue
-        if unicodedata.category(character) in {"Cc", "Cf", "Cs"}:
-            continue
-        cleaned.append(character)
-    return _truncate("".join(cleaned), length)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
