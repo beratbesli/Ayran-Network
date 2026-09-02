@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ayran-network = "ayran_network.app:main"
+ayranetwork = "ayran_network.app:main"
 
 [project.optional-dependencies]
 dev = [

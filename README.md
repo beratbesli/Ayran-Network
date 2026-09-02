@@ -84,7 +84,7 @@ Run directly as a module or through the console entry point:
 
 ```bash
 # Run with console command
-ayran-network
+ayranetwork
 
 # Or run via Python module
 python3 -m ayran_network
@@ -164,7 +164,7 @@ Under Linux security models, standard unprivileged users can only inspect networ
 To observe system-wide sockets from all system processes:
 ```bash
 # Option A: Run with sudo
-sudo ayran-network
+sudo ayranetwork
 
 # Option B: Or set cap_net_admin / cap_sys_ptrace on your python binary if preferred
 ```
