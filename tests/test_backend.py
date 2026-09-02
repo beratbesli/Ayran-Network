@@ -15,6 +15,7 @@ from ayran_network.backend import (
     GlobalRates,
     PsutilNetworkBackend,
 )
+from ayran_network.interface_filter import InterfaceFilter
 
 
 @pytest.fixture(autouse=True)
@@ -142,6 +143,30 @@ async def test_global_rates_first_sample_delta_and_counter_reset(
     assert reset.global_rates.download_bytes_per_second == 0.0
     assert reset.global_rates.interval_seconds == 2.0
     assert sampler.latest_snapshot is reset
+
+
+@pytest.mark.asyncio
+async def test_interface_filter_uses_only_selected_interface_counters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[bool] = []
+
+    def pernic_counters(*, pernic: bool = False) -> dict[str, SimpleNamespace]:
+        calls.append(pernic)
+        return {
+            "eth0": SimpleNamespace(bytes_sent=100, bytes_recv=200),
+            "docker0": SimpleNamespace(bytes_sent=900, bytes_recv=800),
+        }
+
+    monkeypatch.setattr(psutil, "net_io_counters", pernic_counters)
+    monkeypatch.setattr(psutil, "process_iter", lambda **_kwargs: [])
+    sampler = PsutilNetworkBackend(interface_filter=InterfaceFilter.from_value("include:eth0"))
+
+    snapshot = await sampler.sample()
+
+    assert calls == [True]
+    assert snapshot.global_rates.total_bytes_sent == 100
+    assert snapshot.global_rates.total_bytes_received == 200
 
 
 @pytest.mark.asyncio

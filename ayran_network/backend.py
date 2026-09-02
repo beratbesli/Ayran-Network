@@ -152,6 +152,7 @@ class PsutilNetworkBackend:
         if counter_warning is not None:
             warnings.insert(0, counter_warning)
         processes = tuple(unrated.snapshot for unrated in unrated_processes)
+        warnings = list(dict.fromkeys(warnings))[:32]
         return NetworkSnapshot(
             sampled_at=sampled_at,
             global_rates=global_rates,
@@ -244,7 +245,7 @@ class PsutilNetworkBackend:
                 if unrated is not None:
                     processes.append(unrated)
         except psutil.AccessDenied as error:
-            warnings.append(_format_enumeration_warning(error))
+            _append_warning(warnings, _format_enumeration_warning(error))
         except (psutil.NoSuchProcess, psutil.ZombieProcess):
             # A process can disappear while psutil is advancing the iterator.
             pass
@@ -287,7 +288,7 @@ class PsutilNetworkBackend:
         except psutil.AccessDenied as error:
             pid = process.pid
             warning = _format_process_warning(pid, error)
-            warnings.append(warning)
+            _append_warning(warnings, warning)
             return _limited_process(pid=pid, warning=warning)
 
         if grouped_connections is not None and pid in grouped_connections:
