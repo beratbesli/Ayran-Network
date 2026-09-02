@@ -20,7 +20,7 @@ from ayran_network.app import (
     format_rate,
 )
 from ayran_network.backend import (
-    PROCESS_RATE_ESTIMATE_BASIS,
+    PROCESS_ACTIVITY_BASIS,
     GlobalRates,
     NetworkSnapshot,
     ProcessConnection,
@@ -161,7 +161,7 @@ def process(
         established_connection_count=0,
         listening_connection_count=0,
         activity_score=upload,
-        rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
+        activity_basis=PROCESS_ACTIVITY_BASIS,
         create_time=create_time,
         limited_access=limited_access,
     )

@@ -29,14 +29,14 @@
 │  ▼ Download: 14.2 MB/s  [ ▂▃▅▆▇█]   ▲ Upload: 1.8 MB/s   [   ▂▃▅]     │
 ├───────────────────────────────────────────────────────────────────────┤
 │  Focused Applications                                                 │
-│  PID    PROCESS       TRAFFIC LEVEL  CONNECTIONS   DESTINATIONS       │
-│  4210   firefox       ● HIGH         18            🇩🇪 DE, 🇺🇸 US, 🇳🇱 NL │
-│  8832   steam         ● MEDIUM        6            🇺🇸 US              │
+│  PID    PROCESS       CONNECTION ACTIVITY  CONNECTIONS   DESTINATIONS │
+│  4210   firefox       ● HIGH             18            🇩🇪 DE, 🇺🇸 US  │
+│  8832   steam         ● MEDIUM             6            🇺🇸 US         │
 │                                                                       │
 │  Background Services & Daemons                                        │
 │  PID    PROCESS       TRAFFIC LEVEL  CONNECTIONS   DESTINATIONS       │
-│  1042   tailscaled    ● LOW           4            🇬🇧 GB              │
-│  1190   systemd-resolved ● IDLE       2            -                  │
+│  1042   tailscaled    ● LOW              4            🇬🇧 GB             │
+│  1190   systemd-resolved ● IDLE          2            -                 │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 

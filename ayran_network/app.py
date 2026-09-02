@@ -26,6 +26,7 @@ from ayran_network.backend import NetworkSnapshot, ProcessSnapshot, PsutilNetwor
 from ayran_network.config import AyranNetworkConfig, load_config
 from ayran_network.export import write_snapshot_exports
 from ayran_network.focus import FocusClassifier, FocusSelection
+from ayran_network.formatting import format_bytes, format_rate
 from ayran_network.geoip import GeoIPResolver, GeoIPResult
 from ayran_network.interface_filter import InterfaceFilter
 from ayran_network.process_control import ProcessAction, ProcessActionResult, ProcessController
@@ -298,11 +299,11 @@ class ProcessDetailsScreen(ModalScreen[None]):
                 f"Connections: {self.process.connection_count} "
                 f"(Established: {self.process.established_connection_count}, "
                 f"Listening: {self.process.listening_connection_count})\n"
-                f"Traffic Score: {self.process.activity_score:.1f}"
+                f"Connection Activity Score: {self.process.activity_score:.1f}"
             )
             yield Static(Text(info), id="process-details-info")
 
-            yield Static("Traffic History", classes="metric-name")
+            yield Static("Connection Activity History", classes="metric-name")
             yield Sparkline(
                 self.activity_history,
                 min_color="#4b8bd8",
@@ -598,7 +599,7 @@ class AyranNetworkApp(App[None]):
         yield Static("No processes match the current search.", id="search-empty")
         with Vertical(id="focus-process-layout"):
             yield Static("FOCUS MODE", id="focus-mode-banner")
-            yield Static("Focused App Traffic", classes="section-title")
+            yield Static("Focused App Connections", classes="section-title")
             yield ProcessTable(id="focused-process-table", cursor_type="row", zebra_stripes=True)
             yield Static("Background Noise", classes="section-title")
             yield ProcessTable(id="background-process-table", cursor_type="row", zebra_stripes=True)
@@ -1350,33 +1351,6 @@ def _bounded_terminal_text(
             continue
         cleaned.append(character)
     return _truncate("".join(cleaned), length)
-
-
-def format_rate(bytes_per_second: float) -> str:
-    """Format a byte rate for compact display."""
-
-    return f"{_format_quantity(bytes_per_second)}/s"
-
-
-def format_bytes(byte_count: int) -> str:
-    """Format an accumulated byte count for compact display."""
-
-    return _format_quantity(float(byte_count))
-
-
-def _format_quantity(value: float) -> str:
-    if not math.isfinite(value) or value <= 0.0:
-        return "0 B"
-
-    units = ("B", "KiB", "MiB", "GiB", "TiB", "PiB")
-    unit_index = 0
-    while value >= 1024.0 and unit_index < len(units) - 1:
-        value /= 1024.0
-        unit_index += 1
-
-    if unit_index == 0:
-        return f"{value:.0f} {units[unit_index]}"
-    return f"{value:.1f} {units[unit_index]}"
 
 
 def main(argv: Sequence[str] | None = None) -> None:

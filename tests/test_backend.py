@@ -11,7 +11,7 @@ import psutil
 import pytest
 
 from ayran_network.backend import (
-    PROCESS_RATE_ESTIMATE_BASIS,
+    PROCESS_ACTIVITY_BASIS,
     GlobalRates,
     PsutilNetworkBackend,
 )
@@ -199,7 +199,7 @@ async def test_process_connections_counts_and_connection_weighted_estimates(
     )
     assert remote_connection.remote_host == "203.0.113.4"
     assert remote_connection.remote_port == 443
-    assert browser.rate_estimate_basis == PROCESS_RATE_ESTIMATE_BASIS
+    assert browser.activity_basis == PROCESS_ACTIVITY_BASIS
     assert browser.activity_score == pytest.approx(1.0)
     assert resolver.activity_score == pytest.approx(0.5)
 

@@ -19,11 +19,7 @@ import psutil
 
 from ayran_network.interface_filter import InterfaceFilter
 
-# Machine-readable label for the per-process estimation strategy.
 PROCESS_ACTIVITY_BASIS: Final = "visible_connection_activity"
-# Kept as a source compatibility alias for integrations written before the UI
-# clarified that this value is not a bandwidth measurement.
-PROCESS_RATE_ESTIMATE_BASIS: Final = PROCESS_ACTIVITY_BASIS
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +60,7 @@ class ProcessConnection:
 
 @dataclass(frozen=True, slots=True)
 class ProcessSnapshot:
-    """Process identity, connections, counts, and explicitly estimated rates."""
+    """Process identity, connections, counts, and connection activity."""
 
     pid: int
     name: str
@@ -75,7 +71,7 @@ class ProcessSnapshot:
     established_connection_count: int
     listening_connection_count: int
     activity_score: float
-    rate_estimate_basis: str
+    activity_basis: str
     create_time: float | None = None
     limited_access: bool = False
     warning: str | None = None
@@ -324,7 +320,7 @@ class PsutilNetworkBackend:
                         established_connection_count=0,
                         listening_connection_count=0,
                         activity_score=0.0,
-                        rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
+                        activity_basis=PROCESS_ACTIVITY_BASIS,
                         limited_access=True,
                         warning=warning,
                     ),
@@ -356,7 +352,7 @@ class PsutilNetworkBackend:
                 established_connection_count=established_count,
                 listening_connection_count=listening_count,
                 activity_score=activity_score,
-                rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
+                activity_basis=PROCESS_ACTIVITY_BASIS,
                 create_time=create_time,
             ),
             activity_score=activity_score,
@@ -377,7 +373,7 @@ def _limited_process(*, pid: int, warning: str) -> _UnratedProcess:
             established_connection_count=0,
             listening_connection_count=0,
             activity_score=0.0,
-            rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
+            activity_basis=PROCESS_ACTIVITY_BASIS,
             limited_access=True,
             warning=warning,
         ),
@@ -487,7 +483,6 @@ __all__ = [
     "NetworkBackend",
     "NetworkSnapshot",
     "PROCESS_ACTIVITY_BASIS",
-    "PROCESS_RATE_ESTIMATE_BASIS",
     "ProcessConnection",
     "ProcessSnapshot",
     "PsutilNetworkBackend",

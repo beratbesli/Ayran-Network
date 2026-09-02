@@ -4,7 +4,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from ayran_network.backend import PROCESS_RATE_ESTIMATE_BASIS, ProcessSnapshot
+from ayran_network.backend import PROCESS_ACTIVITY_BASIS, ProcessSnapshot
 from ayran_network.focus import (
     DEFAULT_FOCUS_APPS,
     FOCUS_APPS_ENV,
@@ -26,7 +26,7 @@ def process(pid: int, name: str) -> ProcessSnapshot:
         established_connection_count=0,
         listening_connection_count=0,
         activity_score=0.0,
-        rate_estimate_basis=PROCESS_RATE_ESTIMATE_BASIS,
+        activity_basis=PROCESS_ACTIVITY_BASIS,
         create_time=100.0 + pid,
     )
 

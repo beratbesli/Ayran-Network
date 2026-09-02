@@ -157,7 +157,7 @@ def _process_to_dict(process: ProcessSnapshot) -> dict[str, object]:
         "established_connection_count": process.established_connection_count,
         "listening_connection_count": process.listening_connection_count,
         "activity_score": process.activity_score,
-        "connection_activity_basis": process.rate_estimate_basis,
+        "connection_activity_basis": process.activity_basis,
         "connections": [
             {
                 "local_host": c.local_host,
