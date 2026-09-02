@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import sys
 from dataclasses import dataclass, replace
@@ -125,7 +126,7 @@ def _parse_config(
         focus_apps=focus_apps,
         focus_extend_defaults=_bool_value(focus, "extend_defaults", True),
         geoip_enabled=_bool_value(geoip, "enabled", False),
-        geoip_endpoint=_str_value(geoip, "endpoint", _DEFAULT_GEOIP_ENDPOINT),
+        geoip_endpoint=_https_endpoint_value(geoip, "endpoint", _DEFAULT_GEOIP_ENDPOINT),
         interface_filter=_str_value(interface, "filter", ""),
         export_dir=_str_value(export, "directory", ""),
         source_path=source_path,
@@ -135,6 +136,15 @@ def _parse_config(
 def _str_value(section: dict[str, Any], key: str, default: str) -> str:
     value = section.get(key)
     return str(value).strip() if value is not None else default
+
+
+def _https_endpoint_value(section: dict[str, Any], key: str, default: str) -> str:
+    value = _str_value(section, key, default)
+    if value.startswith("https://") and "{encoded_ip}" in value:
+        return value
+    if value != default:
+        _LOGGER.warning("Invalid Geo-IP endpoint; using the default HTTPS endpoint.")
+    return default
 
 
 def _int_value(section: dict[str, Any], key: str, default: int) -> int:
@@ -153,7 +163,7 @@ def _float_value(section: dict[str, Any], key: str, default: float) -> float:
 
 def _positive_float_value(section: dict[str, Any], key: str, default: float) -> float:
     value = _float_value(section, key, default)
-    if value <= 0.0:
+    if not math.isfinite(value) or value <= 0.0:
         _LOGGER.warning("Invalid %s value; using %.1f.", key, default)
         return default
     return value
@@ -195,7 +205,12 @@ def _apply_environment(config: AyranNetworkConfig) -> AyranNetworkConfig:
     if (raw := os.environ.get("AYRAN_NETWORK_GEOIP_ENABLED")) is not None:
         values["geoip_enabled"] = _env_bool(raw, config.geoip_enabled)
     if (raw := os.environ.get("AYRAN_NETWORK_GEOIP_ENDPOINT")):
-        values["geoip_endpoint"] = raw.strip()
+        candidate = raw.strip()
+        values["geoip_endpoint"] = (
+            candidate
+            if candidate.startswith("https://") and "{encoded_ip}" in candidate
+            else config.geoip_endpoint
+        )
     if (raw := os.environ.get("AYRAN_NETWORK_INTERFACE_FILTER")) is not None:
         values["interface_filter"] = raw.strip()
     if (raw := os.environ.get("AYRAN_NETWORK_EXPORT_DIR")) is not None:
@@ -237,7 +252,7 @@ def _env_positive_float(raw: str, default: float) -> float:
         value = float(raw)
     except ValueError:
         return default
-    return value if value > 0.0 else default
+    return value if math.isfinite(value) and value > 0.0 else default
 
 
 def _env_history_size(raw: str, default: int) -> int:

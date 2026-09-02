@@ -7,7 +7,7 @@ from typing import TypeAlias
 import pytest
 from textual.binding import Binding
 from textual.containers import Vertical
-from textual.widgets import Sparkline, Static
+from textual.widgets import Input, Sparkline, Static
 
 from ayran_network.app import (
     AyranNetworkApp,
@@ -315,6 +315,55 @@ async def test_slow_sampling_runs_in_background_without_overlapping_refreshes() 
         await pilot.pause()
 
         assert app.query_one("#process-table", ProcessTable).row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_search_matches_pid_and_name_and_keeps_focus_mode() -> None:
+    backend = FakeBackend(snapshot(process(12, name="browser"), process(34, name="worker")))
+    app = AyranNetworkApp(
+        backend=backend,
+        classifier=FocusClassifier(("browser",)),
+        geoip_enabled=False,
+        poll_interval=3600.0,
+    )
+
+    async with app.run_test(size=(120, 30)) as pilot:
+        await finish_refresh(app)
+        await pilot.press("f")
+        search = app.query_one("#search-input", Input)
+        search.value = "34"
+        await pilot.pause()
+
+        assert app.query_one("#focus-process-layout", Vertical).display
+        focused = app.query_one("#focused-process-table", ProcessTable)
+        background = app.query_one("#background-process-table", ProcessTable)
+        assert [focused.get_row_at(index)[0] for index in range(focused.row_count)] == []
+        assert [background.get_row_at(index)[0] for index in range(background.row_count)] == [34]
+
+        search.value = "browser"
+        await pilot.pause()
+        assert [focused.get_row_at(index)[0] for index in range(focused.row_count)] == [12]
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert search.value == ""
+        assert app.query_one("#focused-process-table", ProcessTable).row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_search_empty_result_is_visible() -> None:
+    app = AyranNetworkApp(
+        backend=FakeBackend(snapshot(process(12, name="browser"))),
+        geoip_enabled=False,
+        poll_interval=3600.0,
+    )
+    async with app.run_test(size=(120, 30)) as pilot:
+        await finish_refresh(app)
+        await pilot.press("f")
+        app.query_one("#search-input", Input).value = "missing"
+        await pilot.pause()
+        assert app.query_one("#search-empty", Static).display
+        assert app.query_one("#process-table", ProcessTable).row_count == 0
 
 
 @pytest.mark.asyncio

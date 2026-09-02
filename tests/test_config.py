@@ -63,3 +63,34 @@ def test_types_parsing(tmp_path: Path) -> None:
     assert config.history_size == 60  # default fallback
     assert config.focus_apps == ("app1", "app2")
     assert config.focus_extend_defaults is True  # default fallback
+
+
+def test_environment_overrides_toml_values(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        '[general]\npoll_interval = 2.0\nhistory_size = 10\n'
+        '[geoip]\nenabled = true\n[export]\ndirectory = "toml-dir"\n'
+    )
+    monkeypatch.setenv("AYRAN_NETWORK_CONFIG", str(config_file))
+    monkeypatch.setenv("AYRAN_NETWORK_POLL_INTERVAL", "0.25")
+    monkeypatch.setenv("AYRAN_NETWORK_HISTORY_SIZE", "20")
+    monkeypatch.setenv("AYRAN_NETWORK_GEOIP_ENABLED", "false")
+    monkeypatch.setenv("AYRAN_NETWORK_EXPORT_DIR", "env-dir")
+
+    config = load_config()
+
+    assert config.poll_interval == 0.25
+    assert config.history_size == 20
+    assert config.geoip_enabled is False
+    assert config.export_dir == "env-dir"
+
+
+def test_invalid_section_types_use_safe_defaults(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('[general]\npoll_interval = 2\n[geoip]\nenabled = true\nfocus = "bad"\n')
+
+    config = load_config(config_file)
+
+    assert config.poll_interval == 2.0
+    assert config.geoip_enabled is True
+    assert config.focus_apps == ()
