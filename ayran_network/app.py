@@ -9,6 +9,7 @@ import re
 import unicodedata
 from collections import deque
 from collections.abc import Sequence
+from dataclasses import replace
 from functools import partial
 from ipaddress import ip_address
 from typing import Final, Protocol
@@ -743,6 +744,14 @@ class AyranNetworkApp(App[None]):
             from pathlib import Path
 
             export_dir = self.config.export_dir or str(Path.home() / ".ayran-network" / "exports")
+            snapshot = replace(
+                snapshot,
+                metadata={
+                    "config_source": self.config.source_path,
+                    "interface_filter": self.config.interface_filter,
+                    "geoip_enabled": self._geoip_enabled,
+                },
+            )
             json_path, csv_path = await asyncio.to_thread(
                 write_snapshot_exports, snapshot, export_dir
             )
@@ -1382,8 +1391,6 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(argv)
     config = load_config(args.config)
     if args.interface_filter is not None or args.export_dir is not None:
-        from dataclasses import replace
-
         config = replace(
             config,
             interface_filter=(
