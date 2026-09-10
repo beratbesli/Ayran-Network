@@ -181,13 +181,19 @@ process socket details; elevated privileges may be required for system-wide visi
 
 Under Linux security models, standard unprivileged users can only inspect network sockets belonging to processes owned by their user.
 
-To observe system-wide sockets from all system processes:
-```bash
-# Option A: Run with sudo
-sudo ayranetwork
+Start as an unprivileged user whenever possible. The application remains useful
+with partial process visibility and does not need administrator privileges for
+read-only per-user monitoring.
 
-# Option B: Or set cap_net_admin / cap_sys_ptrace on your python binary if preferred
-```
+System-wide socket visibility is platform-dependent. If it is required, prefer
+a narrowly scoped, documented service or capability wrapper configured by the
+system administrator. Do **not** grant capabilities to a general-purpose
+Python interpreter and do not run the whole development environment as root.
+Process actions (suspend, resume, terminate) should be treated as privileged
+operations and tested on disposable workloads first.
+
+Exports can contain process names, PIDs, endpoints, and timestamps. Keep the
+default 0700 export directory private and review a snapshot before sharing it.
 
 ---
 
