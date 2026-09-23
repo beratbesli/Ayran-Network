@@ -21,7 +21,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Sparkline, Static
 
 from ayran_network.backend import NetworkSnapshot, ProcessSnapshot, PsutilNetworkBackend
-from ayran_network.config import AyranNetworkConfig, load_config
+from ayran_network.config import MIN_POLL_INTERVAL, AyranNetworkConfig, load_config
 from ayran_network.export import write_snapshot_exports
 from ayran_network.focus import FocusClassifier, FocusSelection
 from ayran_network.formatting import format_bytes, format_rate
@@ -483,8 +483,11 @@ class AyranNetworkApp(App[None]):
         effective_history_size = (
             effective_config.history_size if history_size is None else history_size
         )
-        if not math.isfinite(effective_poll_interval) or effective_poll_interval <= 0.0:
-            raise ValueError("poll_interval must be a positive finite number")
+        if (
+            not math.isfinite(effective_poll_interval)
+            or effective_poll_interval < MIN_POLL_INTERVAL
+        ):
+            raise ValueError(f"poll_interval must be at least {MIN_POLL_INTERVAL} seconds")
         if effective_history_size < 2:
             raise ValueError("history_size must be at least two")
 

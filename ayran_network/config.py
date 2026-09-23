@@ -18,6 +18,8 @@ else:
 
 __all__ = ["AyranNetworkConfig", "load_config"]
 
+MIN_POLL_INTERVAL: Final = 0.1
+
 _CONFIG_PATHS: Final[tuple[Path, ...]] = (
     Path.home() / ".config" / "ayran-network" / "config.toml",
     Path.home() / ".ayran-network" / "config.toml",
@@ -163,7 +165,7 @@ def _float_value(section: dict[str, Any], key: str, default: float) -> float:
 
 def _positive_float_value(section: dict[str, Any], key: str, default: float) -> float:
     value = _float_value(section, key, default)
-    if not math.isfinite(value) or value <= 0.0:
+    if not math.isfinite(value) or value < MIN_POLL_INTERVAL:
         _LOGGER.warning("Invalid %s value; using %.1f.", key, default)
         return default
     return value
@@ -252,7 +254,7 @@ def _env_positive_float(raw: str, default: float) -> float:
         value = float(raw)
     except ValueError:
         return default
-    return value if math.isfinite(value) and value > 0.0 else default
+    return value if math.isfinite(value) and value >= MIN_POLL_INTERVAL else default
 
 
 def _env_history_size(raw: str, default: int) -> int:

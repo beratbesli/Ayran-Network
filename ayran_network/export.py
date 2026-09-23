@@ -55,7 +55,7 @@ def export_csv(snapshot: NetworkSnapshot) -> str:
     timestamp = datetime.fromtimestamp(snapshot.sampled_at, tz=timezone.utc).isoformat()
     for process in snapshot.processes:
         writer.writerow(
-            [
+            [_safe_csv_cell(value) for value in [
                 timestamp,
                 process.pid,
                 process.name,
@@ -83,9 +83,16 @@ def export_csv(snapshot: NetworkSnapshot) -> str:
                 json.dumps([connection.status for connection in process.connections]),
                 json.dumps([connection.family for connection in process.connections]),
                 json.dumps([connection.socket_type for connection in process.connections]),
-            ]
+            ]]
         )
     return output.getvalue()
+
+
+def _safe_csv_cell(value: object) -> object:
+    """Force user-controlled spreadsheet formulas to remain text."""
+    if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
 
 
 def write_snapshot_exports(snapshot: NetworkSnapshot, directory: str | Path) -> tuple[Path, Path]:

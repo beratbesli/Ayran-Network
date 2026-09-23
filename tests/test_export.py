@@ -1,5 +1,7 @@
 """Tests for the export functionality."""
 
+import csv
+import io
 import json
 import os
 from pathlib import Path
@@ -93,6 +95,43 @@ def test_export_csv() -> None:
     assert ("123,test_process,test_user,running,0,0,0,10.0,100.0,200.0,1000,2000") in result
 
 
+def test_export_csv_neutralizes_formula_cells() -> None:
+    snapshot = NetworkSnapshot(
+        sampled_at=1620000000.0,
+        global_rates=GlobalRates(
+            upload_bytes_per_second=1.0,
+            download_bytes_per_second=2.0,
+            total_bytes_sent=3,
+            total_bytes_received=4,
+            interval_seconds=1.0,
+        ),
+        processes=(ProcessSnapshot(
+            pid=1,
+            name="=HYPERLINK(\"https://example.invalid\")",
+            username="  +SUM(1,1)",
+            status="@cmd",
+            create_time=0.0,
+            connections=(),
+            connection_count=0,
+            established_connection_count=0,
+            listening_connection_count=0,
+            activity_score=0.0,
+            activity_basis="test",
+            limited_access=False,
+            warning="-1+2",
+        ),),
+        limited_access=False,
+        warnings=(),
+    )
+
+    row = list(csv.DictReader(io.StringIO(export_csv(snapshot))))[0]
+    assert row["name"].startswith("'=HYPERLINK")
+    assert row["username"] == "'  +SUM(1,1)"
+    assert row["status"] == "'@cmd"
+    assert row["warning"] == "'-1+2"
+    assert row["pid"] == "1"
+
+
 def test_snapshot_exports_are_unique_atomic_and_private(tmp_path: Path) -> None:
     snapshot = NetworkSnapshot(
         sampled_at=1620000000.0,
@@ -113,9 +152,10 @@ def test_snapshot_exports_are_unique_atomic_and_private(tmp_path: Path) -> None:
 
     assert first[0] != second[0]
     assert all(path.exists() for path in (*first, *second))
-    assert all(
-        path.stat().st_mode & 0o777 == 0o600
-        for path in (*first, *second)
-    )
-    assert (tmp_path / "exports").stat().st_mode & 0o777 == 0o700
+    if os.name == "posix":
+        assert all(
+            path.stat().st_mode & 0o777 == 0o600
+            for path in (*first, *second)
+        )
+        assert (tmp_path / "exports").stat().st_mode & 0o777 == 0o700
     assert os.listdir(tmp_path / "exports")
