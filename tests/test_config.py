@@ -14,6 +14,16 @@ def test_default_config() -> None:
     assert config.focus_apps == ()
 
 
+def test_too_fast_polling_falls_back_to_safe_interval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("[general]\npoll_interval = 0.001\n")
+    assert load_config(config_file).poll_interval == 1.0
+    monkeypatch.setenv("AYRAN_NETWORK_POLL_INTERVAL", "0.0001")
+    assert load_config(config_file).poll_interval == 1.0
+
+
 def test_load_explicit_path(tmp_path: Path) -> None:
     config_file = tmp_path / "config.toml"
     config_file.write_text('[general]\npoll_interval = 2.5\n[focus]\napps = ["TestApp"]\n')

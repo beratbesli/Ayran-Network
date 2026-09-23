@@ -456,6 +456,8 @@ async def test_sampling_error_is_reported_and_next_refresh_can_recover() -> None
 def test_constructor_validates_polling_configuration_and_declares_keys() -> None:
     with pytest.raises(ValueError, match="poll_interval"):
         AyranNetworkApp(poll_interval=0.0)
+    with pytest.raises(ValueError, match="poll_interval"):
+        AyranNetworkApp(poll_interval=0.001)
     with pytest.raises(ValueError, match="history_size"):
         AyranNetworkApp(history_size=1)
 
